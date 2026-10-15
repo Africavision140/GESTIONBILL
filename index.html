@@ -3,6 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1f4fd8">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="BILL-ÉCOLE">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>BILL-ÉCOLE – Gestion d'école privée</title>
 <style>
 :root{--bg:#f4f6fb;--card:#fff;--ink:#1c2540;--muted:#6b7694;--line:#e4e8f2;--pri:#1f4fd8;--pri2:#e8eefc;--ok:#12a060;--warn:#e89b0c;--bad:#d9342b;--side:#14203f}
@@ -63,7 +71,7 @@ td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
 <div id="app">
 <aside id="side"></aside>
 <main>
-  <div class="top"><button id="menu" onclick="document.getElementById('side').classList.toggle('open')">☰</button><h2 id="title"></h2><div id="topact"></div></div>
+  <div class="top"><button id="menu" onclick="document.getElementById('side').classList.toggle('open')">☰</button><h2 id="title"></h2><div id="topact"></div><button id="inst" class="btn ghost" style="display:none" onclick="installApp()">📲 Installer l'application</button></div>
   <div id="view"></div>
 </main>
 </div>
@@ -471,6 +479,20 @@ function demo(){
   save();render();
 }
 
+/* ============ INSTALLATION (PWA) ============ */
+let _dip=null;
+const isStandalone=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone;
+const isIOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+function showInst(){const b=document.getElementById('inst');if(b)b.style.display=(isStandalone()?'none':'inline-block')}
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();_dip=e;showInst()});
+window.addEventListener('appinstalled',()=>{_dip=null;showInst()});
+async function installApp(){
+  if(_dip){_dip.prompt();await _dip.userChoice;_dip=null;showInst();return}
+  if(isIOS())modal(`<h3>Installer sur iPhone / iPad</h3><p>1. Ouvrez cette page dans <b>Safari</b>.<br>2. Touchez le bouton <b>Partager</b> (carré avec une flèche).<br>3. Choisissez <b>« Sur l'écran d'accueil »</b>, puis <b>Ajouter</b>.</p><div class="row"><button class="btn" onclick="closeM()">OK</button></div>`);
+  else modal(`<h3>Installer l'application</h3><p><b>Ordinateur (Chrome / Edge) :</b> cliquez sur l'icône d'installation à droite de la barre d'adresse, ou menu ⋮ → « Installer BILL-ÉCOLE ».<br><br><b>Tablette / téléphone Android :</b> menu ⋮ → « Installer l'application » ou « Ajouter à l'écran d'accueil ».</p><p style="color:var(--muted)">L'installation nécessite que la page soit ouverte depuis son adresse en ligne (https), pas depuis un fichier sur l'ordinateur.</p><div class="row"><button class="btn" onclick="closeM()">OK</button></div>`);
+}
+if('serviceWorker' in navigator&&location.protocol.startsWith('http')){window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}
+showInst();
 render();
 </script>
 </body>
