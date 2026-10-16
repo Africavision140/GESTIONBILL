@@ -11,6 +11,10 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="BILL-ÉCOLE">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
+<script src="firebase-config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <title>BILL-ÉCOLE – Gestion d'école privée</title>
 <style>
 :root{--bg:#f4f6fb;--card:#fff;--ink:#1c2540;--muted:#6b7694;--line:#e4e8f2;--pri:#1f4fd8;--pri2:#e8eefc;--ok:#12a060;--warn:#e89b0c;--bad:#d9342b;--side:#14203f}
@@ -76,6 +80,7 @@ td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
 </main>
 </div>
 <div id="modal"></div>
+<div id="auth" style="position:fixed;inset:0;background:linear-gradient(135deg,#14203f,#1f4fd8);z-index:100;align-items:center;justify-content:center;padding:14px;display:none"></div>
 
 <script>
 /* ============ DONNÉES ============ */
@@ -92,11 +97,14 @@ function defaults(){return{
   classes:[],students:[],teachers:[],payments:[],expenses:[],grades:{},att:{},counter:0,mat:0
 }}
 function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&d.settings)return d}catch(e){}return defaults()}
-let S=load();
+const CFG=window.FIREBASE_CONFIG||{};
+const CLOUD=!!(CFG.apiKey&&!/^REMPLACER/i.test(CFG.apiKey));
+const LEGACY=load();
+let S=CLOUD?defaults():LEGACY;
 if(S.settings.name==='Mon École Privée')S.settings.name='BILL-ÉCOLE';
 const logo=()=>S.settings.logo||LOGO_DEFAULT;
 const logoImg=(sz,st)=>`<img src="${logo()}" style="width:${sz}px;height:${sz}px;border-radius:50%;object-fit:cover;vertical-align:middle;${st||''}">`;
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){alert("Espace de stockage plein : faites une sauvegarde JSON et réduisez le nombre de photos.")}}
+function save(){if(CLOUD){cloudPush();return}try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){alert("Espace de stockage plein : faites une sauvegarde JSON et réduisez le nombre de photos.")}}
 
 /* ============ OUTILS ============ */
 const uid=()=>Math.random().toString(36).slice(2,9);
@@ -200,15 +208,19 @@ function printCards(list){list=list||S.teachers;if(!list.length){alert('Aucun pr
 const PAGES=[
  ['dashboard','📊','Tableau de bord'],['eleves','👥','Élèves'],['classes','🏫','Classes'],['profs','👩‍🏫','Professeurs'],
  ['paiements','💳','Paiements'],['compta','📒','Comptabilité'],['notes','📝','Notes'],['bulletins','📄','Bulletins'],
- ['presences','✅','Présences'],['params','⚙️','Paramètres']];
+ ['presences','✅','Présences'],['params','⚙️','Paramètres'],['users','👤','Utilisateurs']];
 let page='dashboard';
-function go(p){page=p;document.getElementById('side').classList.remove('open');render()}
+function go(p){if(!pageOK(p))p=defaultPage();page=p;document.getElementById('side').classList.remove('open');render()}
 function render(){
   const side=document.getElementById('side');
-  side.innerHTML=`<h1 style="display:flex;align-items:center;gap:9px">${logoImg(38,'border:2px solid #fff;flex:none')}<span>${esc(S.settings.name)}</span></h1><small>Année ${esc(S.settings.year)}</small>`+PAGES.map(p=>`<a class="${p[0]===page?'on':''}" onclick="go('${p[0]}')">${p[1]} ${p[2]}</a>`).join('');
+  side.innerHTML=`<h1 style="display:flex;align-items:center;gap:9px">${logoImg(38,'border:2px solid #fff;flex:none')}<span>${esc(S.settings.name)}</span></h1><small>Année ${esc(S.settings.year)}</small>`+visiblePages().map(p=>`<a class="${p[0]===page?'on':''}" onclick="go('${p[0]}')">${p[1]} ${p[2]}</a>`).join('');
+  if(!pageOK(page))page=defaultPage();
+  if(CLOUD){side.innerHTML+=`<div style="margin:18px 8px 0;padding-top:12px;border-top:1px solid #2a3b6b;font-size:12px;color:#8e9bc4">${ME?`👤 <b style="color:#fff">${esc(ME.name||ME.email)}</b><br>${esc(ROLE_LABEL[ME.role]||ME.role)}<br>${navigator.onLine?'☁️ En ligne':'⚠️ Hors ligne : modifications en attente'}<br><a style="padding:6px 0;color:#9db7ff" onclick="auth.signOut()">Se déconnecter</a>`:''}</div>`}
   document.getElementById('title').textContent=PAGES.find(p=>p[0]===page)[2];
   document.getElementById('topact').innerHTML='';
-  ({dashboard:vDash,eleves:vEleves,classes:vClasses,profs:vProfs,paiements:vPay,compta:vCompta,notes:vNotes,bulletins:vBull,presences:vPres,params:vParams})[page]();
+  if(CLOUD&&!READY){document.getElementById('view').innerHTML='<div class="card empty">Chargement des données…</div>';return}
+  ({dashboard:vDash,eleves:vEleves,classes:vClasses,profs:vProfs,paiements:vPay,compta:vCompta,notes:vNotes,bulletins:vBull,presences:vPres,params:vParams,users:vUsers})[page]();
+  applyRole();
 }
 
 /* ============ TABLEAU DE BORD ============ */
@@ -243,7 +255,7 @@ function vEleves(){
   document.getElementById('view').innerHTML=`<div class="card"><div class="bar"><input id="q" placeholder="Rechercher (nom, matricule, parent)…" oninput="fillStudents()"><select id="fc" onchange="fillStudents()"><option value="">Toutes les classes</option>${S.classes.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select><select id="fs" onchange="fillStudents()"><option value="">Tous statuts</option><option value="d">Avec impayés</option><option value="s">Soldés</option></select><button class="btn ghost" onclick="printBadges()">🪪 Imprimer les badges (liste affichée)</button><button class="btn ghost" onclick="exportStudents()">Export CSV</button></div><div class="tw" id="tbl"></div></div>`;
   fillStudents();
 }
-function fillStudents(){
+function fillStudents(){setTimeout(applyRole,0);
   const q=(document.getElementById('q').value||'').toLowerCase(),fc=document.getElementById('fc').value,fs=document.getElementById('fs').value;
   const list=S.students.filter(s=>(!fc||s.classId===fc)&&(!q||(s.nom+' '+s.prenom+' '+s.matricule+' '+(s.parent||'')).toLowerCase().includes(q))&&(!fs||(fs==='d'?balance(s)>0:balance(s)<=0)));
   window._list=list;
@@ -455,8 +467,8 @@ function vParams(){
   document.getElementById('view').innerHTML=`<div class="grid two"><div class="card"><b>Établissement</b><form id="pf" style="margin-top:10px"><div class="box" style="padding:0;max-height:none;max-width:none">
   <label>Logo / photo de l'école<div style="display:flex;gap:12px;align-items:center;margin-top:4px"><div id="pv_logo">${logoImg(72)}</div><input type="file" accept="image/*" onchange="pickPhoto(this,'logo')"><input type="hidden" id="ph_logo" name="logo" value="${esc(s.logo||'')}"></div></label><label>Nom de l'école<input name="name" value="${esc(s.name)}"></label><label>Adresse<input name="address" value="${esc(s.address)}"></label><label>Téléphone<input name="phone" value="${esc(s.phone)}"></label><label>Année scolaire<input name="year" value="${esc(s.year)}"></label><label>Devise<input name="currency" value="${esc(s.currency)}"></label></div><button class="btn">Enregistrer</button></form>
   <hr style="border:0;border-top:1px solid var(--line);margin:18px 0"><b>Matières et coefficients</b><div id="subj"></div><button class="btn ghost sm" style="margin-top:8px" onclick="addSubject()">+ Matière</button></div>
-  <div class="card"><b>Données</b><p style="color:var(--muted)">Les données sont enregistrées dans ce navigateur. Faites des sauvegardes régulières.</p>
-  <div class="act" style="flex-direction:column;align-items:stretch"><button class="btn ghost" onclick="backup()">⬇️ Sauvegarder (JSON)</button><label class="btn ghost" style="text-align:center">⬆️ Restaurer une sauvegarde<input type="file" accept=".json" style="display:none" onchange="restore(this.files[0])"></label><button class="btn ghost" onclick="demo()">🧪 Charger données de démo</button><button class="btn red" onclick="resetAll()">Tout effacer</button></div></div></div>`;
+  <div class="card"><b>Données</b><p style="color:var(--muted)">${CLOUD?'Les données sont enregistrées <b>en ligne</b> et partagées entre tous les appareils connectés. Faites quand même des sauvegardes régulières.':'Les données sont enregistrées dans ce navigateur. Faites des sauvegardes régulières.'}</p>
+  <div class="act" style="flex-direction:column;align-items:stretch"><button class="btn ghost" onclick="backup()">⬇️ Sauvegarder (JSON)</button><label class="btn ghost" style="text-align:center">⬆️ Restaurer une sauvegarde<input type="file" accept=".json" style="display:none" onchange="restore(this.files[0])"></label>${CLOUD?'<button class="btn ghost" onclick="importLegacy()">☁️ Envoyer les données de cet appareil en ligne</button>':''}<button class="btn ghost" onclick="demo()">🧪 Charger données de démo</button><button class="btn red" onclick="resetAll()">Tout effacer</button></div></div></div>`;
   document.getElementById('pf').onsubmit=e=>{e.preventDefault();new FormData(e.target).forEach((v,k)=>S.settings[k]=v);save();render()};
   fillSubj();
 }
@@ -464,7 +476,7 @@ function fillSubj(){document.getElementById('subj').innerHTML=`<table>${S.settin
 function addSubject(){openForm('Nouvelle matière',[{k:'n',l:'Matière',r:1},{k:'c',l:'Coefficient',t:'number',d:1}],{},d=>{S.settings.subjects.push({n:d.n,c:+d.c||1})})}
 function backup(){downloadFile('ecolegest-sauvegarde-'+today()+'.json',JSON.stringify(S),'application/json')}
 function restore(f){if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.settings)throw 0;S=d;save();render();alert('Sauvegarde restaurée.')}catch(e){alert('Fichier invalide.')}};r.readAsText(f)}
-function resetAll(){if(confirm('Effacer TOUTES les données ? Cette action est irréversible.')&&confirm('Vraiment tout effacer ?')){S=defaults();save();render()}}
+function resetAll(){if(confirm(CLOUD?'Effacer TOUTES les données EN LIGNE pour tous les utilisateurs ? Cette action est irréversible.':'Effacer TOUTES les données ? Cette action est irréversible.')&&confirm('Vraiment tout effacer ?')){S=defaults();save();render()}}
 function demo(){
   if(S.students.length&&!confirm('Ajouter des données de démo aux données existantes ?'))return;
   const t1={id:uid(),matricule:tmat(),prenom:'Mamadou',nom:'Diallo',sexe:'M',naissance:'1985-04-12',matiere:'Mathématiques',tel:'620000001',email:'m.diallo@exemple.com',adresse:'Kaloum, Conakry',diplome:'Licence en Mathématiques',embauche:'2020-09-01',salaire:1500000},t2={id:uid(),matricule:tmat(),prenom:'Fatoumata',nom:'Camara',sexe:'F',naissance:'1988-11-03',matiere:'Français',tel:'620000002',email:'f.camara@exemple.com',adresse:'Ratoma, Conakry',diplome:'Master en Lettres',embauche:'2021-09-01',salaire:1400000};
@@ -478,6 +490,186 @@ function demo(){
   S.expenses.push({id:uid(),date:'2026-09-30',category:'Salaire',label:'Salaire Mamadou Diallo – septembre 2026',amount:1500000,teacherId:t1.id},{id:uid(),date:'2026-09-10',category:'Fournitures',label:'Craies, cahiers, registres',amount:350000});
   save();render();
 }
+
+/* ============ CLOUD (FIREBASE) : connexion, rôles, synchronisation ============ */
+let ME=null,db=null,auth=null,READY=false,BUSY=false,UNSUBS=[],LAST={},PENDING=new Set(),RT=null;
+const ROLE_LABEL={direction:'Direction',comptable:'Comptable',professeur:'Professeur'};
+const ROLE_PAGES={comptable:['dashboard','eleves','profs','paiements','compta','bulletins'],professeur:['eleves','notes','bulletins','presences']};
+const ROLE_READ={direction:['classes','students','teachers','payments','expenses','grades','att'],comptable:['classes','students','teachers','payments','expenses','grades','att'],professeur:['classes','students','grades','att']};
+const ROLE_WRITE={comptable:['students','payments','expenses','meta/counters'],professeur:['grades','att']};
+const DENY={professeur:['formStudent','delStudent','viewStudent','exportStudents'],comptable:['formClass','delClass','formTeacher','delTeacher']};
+const role=()=>ME?ME.role:'direction';
+function pageOK(p){if(p==='users')return CLOUD&&role()==='direction';const l=ROLE_PAGES[role()];return !l||l.includes(p)}
+const visiblePages=()=>PAGES.filter(p=>pageOK(p[0]));
+const defaultPage=()=>role()==='professeur'?'notes':'dashboard';
+const stable=o=>JSON.stringify(o,(k,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.keys(v).sort().reduce((a,x)=>(a[x]=v[x],a),{}):v);
+function applyRole(){
+  const r=role();
+  (DENY[r]||[]).forEach(fn=>document.querySelectorAll('#view [onclick^="'+fn+'("],#topact [onclick^="'+fn+'("]').forEach(b=>b.remove()));
+  if(r==='professeur'){document.querySelectorAll('#tbl table tr').forEach(tr=>{const c=tr.children;if(c.length>=7){c[5].remove();c[4].remove()}})}
+}
+function toast(m){let t=document.getElementById('toast');if(!t){t=document.createElement('div');t.id='toast';t.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#14203f;color:#fff;padding:11px 18px;border-radius:10px;z-index:99;font-size:13px;max-width:90vw;box-shadow:0 6px 20px rgba(0,0,0,.25)';document.body.appendChild(t)}t.textContent=m;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(()=>t.style.display='none',4500)}
+function friendly(e){const c=(e&&e.code)||'';
+  if(/invalid-credential|wrong-password|user-not-found|invalid-login/.test(c))return 'E-mail ou mot de passe incorrect.';
+  if(c==='auth/too-many-requests')return 'Trop de tentatives. Patientez quelques minutes puis réessayez.';
+  if(c==='auth/network-request-failed')return 'Pas de connexion Internet.';
+  if(c==='auth/invalid-email')return "Adresse e-mail invalide.";
+  if(c==='auth/email-already-in-use')return 'Cette adresse e-mail est déjà utilisée.';
+  if(c==='auth/weak-password')return 'Mot de passe trop court (6 caractères minimum).';
+  if(c==='auth/operation-not-allowed')return "La connexion par e-mail n'est pas activée dans Firebase (Authentication > Sign-in method).";
+  if(c==='permission-denied')return "Accès refusé. Vérifiez que les règles de sécurité Firestore ont été publiées.";
+  return (e&&e.message)||'Erreur inconnue.';}
+
+/* --- écran de connexion --- */
+function authBox(inner,msg){const a=document.getElementById('auth');a.style.display='flex';a.innerHTML=`<div class="box" style="max-width:400px"><div style="text-align:center;margin-bottom:12px">${logoImg(76)}<h3 style="margin:8px 0 0">${esc(S.settings.name)}</h3><small style="color:var(--muted)">Gestion d'école privée</small></div>${msg?`<div style="background:#fde8e6;color:var(--bad);padding:9px 12px;border-radius:8px;margin-bottom:10px;font-size:13px">${esc(msg)}</div>`:''}${inner}</div>`}
+function showAuth(msg,email){
+  authBox(`<form onsubmit="doLogin(event)"><label>Adresse e-mail<input name="email" type="email" required autocomplete="username" value="${esc(email||'')}"></label><label>Mot de passe<input name="password" type="password" required autocomplete="current-password"></label><div class="row" style="justify-content:stretch"><button class="btn" style="width:100%">Se connecter</button></div></form>
+  <p style="text-align:center;margin:12px 0 0;font-size:13px"><a href="#" onclick="doReset();return false">Mot de passe oublié ?</a> · <a href="#" onclick="showSetup();return false">Première configuration</a></p>`,msg);
+}
+function showSetup(msg){
+  authBox(`<p style="color:var(--muted);font-size:13px;margin-top:0">À faire <b>une seule fois</b> : création du compte <b>Direction</b>, qui pourra ensuite ajouter les comptables et les professeurs.</p><form onsubmit="doSetup(event)"><label>Votre nom<input name="name" required></label><label>Adresse e-mail<input name="email" type="email" required></label><label>Mot de passe (6 caractères minimum)<input name="password" type="password" minlength="6" required></label><label>Confirmer le mot de passe<input name="p2" type="password" minlength="6" required></label><div class="row"><button type="button" class="btn ghost" onclick="showAuth()">Retour</button><button class="btn">Créer le compte Direction</button></div></form>`,msg);
+}
+function hideAuth(){const a=document.getElementById('auth');a.style.display='none';a.innerHTML=''}
+async function doLogin(e){e.preventDefault();const f=new FormData(e.target),em=f.get('email').trim();try{await auth.signInWithEmailAndPassword(em,f.get('password'))}catch(x){showAuth(friendly(x),em)}}
+async function doReset(){const em=prompt('Entrez votre adresse e-mail pour recevoir le lien de réinitialisation :');if(!em)return;try{await auth.sendPasswordResetEmail(em.trim());alert('E-mail envoyé. Vérifiez votre boîte de réception (et les courriers indésirables).')}catch(x){alert(friendly(x))}}
+async function doSetup(e){
+  e.preventDefault();const f=new FormData(e.target);
+  if(f.get('password')!==f.get('p2')){showSetup('Les deux mots de passe sont différents.');return}
+  BUSY=true;let cred=null;
+  try{
+    cred=await auth.createUserWithEmailAndPassword(f.get('email').trim(),f.get('password'));
+    const b=db.batch();
+    b.set(db.doc('users/'+cred.user.uid),{name:f.get('name').trim(),email:f.get('email').trim(),role:'direction'});
+    b.set(db.doc('meta/bootstrap'),{by:cred.user.uid,at:Date.now()});
+    await b.commit();
+    BUSY=false;onUser(auth.currentUser);
+  }catch(x){
+    BUSY=false;
+    if(cred){try{await cred.user.delete()}catch(_){try{await auth.signOut()}catch(__){}}}
+    showSetup(x.code==='permission-denied'?"La première configuration a déjà été faite. Retournez à l'écran de connexion.":friendly(x));
+  }
+}
+
+/* --- démarrage et suivi de la connexion --- */
+function initCloud(){
+  if(!window.firebase){showAuth("Impossible de charger le service en ligne (Internet ?). Rechargez la page.");return}
+  firebase.initializeApp(CFG);auth=firebase.auth();db=firebase.firestore();
+  try{db.enablePersistence({synchronizeTabs:true}).catch(()=>{})}catch(e){}
+  auth.onAuthStateChanged(onUser);
+  addEventListener('online',()=>{if(ME)render()});addEventListener('offline',()=>{if(ME)render()});
+}
+function stopListeners(){UNSUBS.forEach(u=>{try{u()}catch(e){}});UNSUBS=[]}
+async function onUser(u){
+  if(BUSY)return;
+  stopListeners();ME=null;READY=false;LAST={};S=defaults();
+  if(!u){page='dashboard';showAuth();return}
+  try{
+    const d=await db.doc('users/'+u.uid).get();
+    if(!d.exists){await auth.signOut();showAuth("Ce compte n'a pas encore de rôle. Demandez à la direction de l'ajouter.");return}
+    ME=Object.assign({uid:u.uid,email:u.email},d.data());
+  }catch(e){await auth.signOut().catch(()=>{});showAuth(friendly(e));return}
+  hideAuth();page=defaultPage();startListeners();render();
+}
+function startListeners(){
+  const cols=ROLE_READ[ME.role]||[],docs=['meta/settings'].concat(ME.role==='professeur'?[]:['meta/counters']);
+  PENDING=new Set(cols.concat(docs));
+  cols.forEach(c=>UNSUBS.push(db.collection(c).onSnapshot(s=>onCol(c,s),e=>onErr(c,e))));
+  docs.forEach(p=>UNSUBS.push(db.doc(p).onSnapshot(s=>onDoc(p,s),e=>onErr(p,e))));
+}
+function onErr(p,e){console.error(p,e);toast('Lecture impossible ('+p+') : '+friendly(e))}
+function mergeArr(arr,items){
+  const byId=new Map(arr.map(o=>[o.id,o])),ids=new Set(items.map(o=>o.id));
+  for(let i=arr.length-1;i>=0;i--)if(!ids.has(arr[i].id))arr.splice(i,1);
+  items.forEach(n=>{const o=byId.get(n.id);if(o){Object.keys(o).forEach(k=>{if(!(k in n))delete o[k]});Object.assign(o,n)}else arr.push(n)});
+}
+const SORTS={students:(a,b)=>String(a.matricule||'').localeCompare(String(b.matricule||'')),teachers:(a,b)=>String(a.matricule||a.nom||'').localeCompare(String(b.matricule||b.nom||'')),classes:(a,b)=>String(a.name||'').localeCompare(String(b.name||''),'fr',{numeric:true}),payments:(a,b)=>String(a.ref||'').localeCompare(String(b.ref||'')),expenses:(a,b)=>String(a.date||'').localeCompare(String(b.date||''))};
+function onCol(c,snap){
+  const docs=[];snap.forEach(d=>docs.push({id:d.id,data:d.data()}));
+  Object.keys(LAST).forEach(k=>{if(k.startsWith(c+'/'))delete LAST[k]});
+  docs.forEach(d=>LAST[c+'/'+d.id]=stable(d.data));
+  if(c==='grades'){const g={};docs.forEach(d=>{const m=d.data.g||{};Object.keys(m).forEach(k=>g[d.id+'|'+k]=m[k])});S.grades=g}
+  else if(c==='att'){const a={};docs.forEach(d=>{const x=d.data;a[x.d+'|'+x.c]=x.r});S.att=a}
+  else{mergeArr(S[c],docs.map(d=>d.data));if(SORTS[c])S[c].sort(SORTS[c])}
+  synced(c);
+}
+function onDoc(p,snap){
+  if(snap.exists){const d=snap.data();LAST[p]=stable(d);
+    if(p==='meta/settings'&&d.settings){Object.keys(S.settings).forEach(k=>{if(!(k in d.settings))delete S.settings[k]});Object.assign(S.settings,d.settings)}
+    if(p==='meta/counters'){['counter','mat','tmat'].forEach(k=>S[k]=Math.max(S[k]||0,d[k]||0))}
+  }else delete LAST[p];
+  synced(p);
+}
+function synced(k){
+  if(!READY){PENDING.delete(k);if(PENDING.size)return;READY=true;afterReady()}
+  scheduleRender();
+}
+function scheduleRender(){clearTimeout(RT);RT=setTimeout(()=>{const a=document.activeElement;if(a&&a.closest&&a.closest('#view')&&/INPUT|SELECT/.test(a.tagName)&&!document.getElementById('modal').classList.contains('on')){scheduleRender();return}render()},250)}
+function afterReady(){
+  const empty=!S.classes.length&&!S.students.length&&!S.teachers.length&&!LAST['meta/settings'];
+  const has=LEGACY.students.length||LEGACY.classes.length||LEGACY.teachers.length;
+  let done=false;try{done=localStorage.getItem('ecolegest_imported')}catch(e){}
+  if(role()==='direction'&&empty&&has&&!done&&confirm("Des données existent déjà sur cet appareil ("+LEGACY.students.length+" élèves, "+LEGACY.teachers.length+" professeurs).\n\nVoulez-vous les envoyer en ligne pour les partager avec les autres appareils ?"))importLegacy(true);
+}
+function importLegacy(skipConfirm){
+  if(!skipConfirm&&!confirm("Remplacer les données en ligne par celles de cet appareil ? Les données en ligne actuelles seront effacées."))return;
+  ['classes','students','teachers','payments','expenses'].forEach(c=>{S[c].length=0;(LEGACY[c]||[]).forEach(o=>S[c].push(o))});
+  S.grades=Object.assign({},LEGACY.grades);S.att=Object.assign({},LEGACY.att);
+  Object.assign(S.settings,LEGACY.settings);if(S.settings.name==='Mon École Privée')S.settings.name='BILL-ÉCOLE';
+  ['counter','mat','tmat'].forEach(k=>S[k]=LEGACY[k]||0);
+  try{localStorage.setItem('ecolegest_imported','1')}catch(e){}
+  cloudPush();render();toast('Données envoyées en ligne.');
+}
+
+/* --- envoi des modifications (seulement ce qui a changé) --- */
+function cloudItems(){
+  const m={};
+  ['classes','students','teachers','payments','expenses'].forEach(c=>S[c].forEach(o=>m[c+'/'+o.id]=o));
+  const g={};Object.keys(S.grades).forEach(k=>{const i=k.indexOf('|');(g[k.slice(0,i)]=g[k.slice(0,i)]||{})[k.slice(i+1)]=S.grades[k]});
+  Object.keys(g).forEach(sid=>m['grades/'+sid]={g:g[sid]});
+  Object.keys(S.att).forEach(k=>{const [d,c]=k.split('|');m['att/'+d+'_'+c]={d:d,c:c,r:S.att[k]}});
+  m['meta/settings']={settings:S.settings};
+  m['meta/counters']={counter:S.counter||0,mat:S.mat||0,tmat:S.tmat||0};
+  return m;
+}
+function allowedWrite(p){const w=ROLE_WRITE[role()];return !w||w.some(x=>p===x||p.startsWith(x+'/'))}
+function cloudPush(){
+  if(!ME||!READY)return;
+  const m=cloudItems(),ops=[];
+  Object.keys(m).forEach(p=>{if(!allowedWrite(p))return;const js=stable(m[p]);if(LAST[p]!==js){ops.push(['s',p,JSON.parse(js)]);LAST[p]=js}});
+  Object.keys(LAST).forEach(p=>{if(!(p in m)&&allowedWrite(p)){ops.push(['d',p]);delete LAST[p]}});
+  for(let i=0;i<ops.length;i+=400){
+    const b=db.batch();ops.slice(i,i+400).forEach(o=>o[0]==='s'?b.set(db.doc(o[1]),o[2]):b.delete(db.doc(o[1])));
+    b.commit().catch(e=>{console.error(e);toast(e.code==='permission-denied'?"Action non autorisée pour votre rôle : la modification a été annulée.":'Enregistrement impossible : '+friendly(e))});
+  }
+}
+
+/* --- gestion des utilisateurs (Direction) --- */
+async function vUsers(){
+  document.getElementById('topact').innerHTML='<button class="btn" onclick="formUser()">+ Nouvel utilisateur</button>';
+  const v=document.getElementById('view');v.innerHTML='<div class="card empty">Chargement…</div>';
+  try{
+    const snap=await db.collection('users').get(),rows=[];snap.forEach(d=>rows.push(Object.assign({id:d.id},d.data())));
+    if(page!=='users')return;
+    v.innerHTML=`<div class="card tw"><table><tr><th>Nom</th><th>E-mail</th><th>Rôle</th><th></th></tr>${rows.map(u=>`<tr><td><b>${esc(u.name||'')}</b></td><td>${esc(u.email||'')}</td><td><span class="tag ${u.role==='direction'?'ok':'warn'}">${esc(ROLE_LABEL[u.role]||u.role)}</span></td><td>${u.id===ME.uid?'<small style="color:var(--muted)">(vous)</small>':`<div class="act"><button class="btn sm ghost" onclick="chgRole('${u.id}','${esc(u.role)}')">Changer le rôle</button><button class="btn sm red" onclick="rmUser('${u.id}')">Retirer l'accès</button></div>`}</td></tr>`).join('')}</table></div>
+    <div class="card" style="margin-top:14px;font-size:13px;color:var(--muted)"><b style="color:var(--ink)">Rôles</b><br><b>Direction</b> : tout.<br><b>Comptable</b> : élèves, paiements, comptabilité, salaires, bulletins (lecture).<br><b>Professeur</b> : élèves (sans les montants), notes, présences, bulletins.</div>`;
+  }catch(e){v.innerHTML='<div class="card empty">Erreur : '+esc(friendly(e))+'</div>'}
+}
+function formUser(){
+  modal(`<h3>Nouvel utilisateur</h3><form onsubmit="saveUser(event)"><label>Nom complet<input name="name" required></label><label>Adresse e-mail<input name="email" type="email" required></label><label>Mot de passe provisoire (6 caractères min.)<input name="password" type="text" minlength="6" required></label><label>Rôle<select name="role"><option value="professeur">Professeur</option><option value="comptable">Comptable</option><option value="direction">Direction</option></select></label><div class="row"><button type="button" class="btn ghost" onclick="closeM()">Annuler</button><button class="btn">Créer le compte</button></div></form>`);
+}
+async function saveUser(e){
+  e.preventDefault();const f=new FormData(e.target),d={name:f.get('name').trim(),email:f.get('email').trim(),password:f.get('password'),role:f.get('role')};
+  const btn=e.target.querySelector('.btn:not(.ghost)');btn.disabled=true;btn.textContent='Création…';
+  const app2=firebase.initializeApp(CFG,'sec'+Date.now());
+  try{
+    const cred=await app2.auth().createUserWithEmailAndPassword(d.email,d.password);
+    await db.doc('users/'+cred.user.uid).set({name:d.name,email:d.email,role:d.role});
+    await app2.auth().signOut();closeM();toast('Compte créé. Transmettez-lui son e-mail et son mot de passe provisoire.');vUsers();
+  }catch(x){btn.disabled=false;btn.textContent='Créer le compte';alert(friendly(x))}
+  finally{try{await app2.delete()}catch(_){}}
+}
+async function chgRole(id,cur){const r=prompt('Nouveau rôle (direction, comptable ou professeur) :',cur);if(!r||!ROLE_LABEL[r.trim()])return;try{await db.doc('users/'+id).update({role:r.trim()});vUsers()}catch(x){alert(friendly(x))}}
+async function rmUser(id){if(!confirm("Retirer l'accès de cet utilisateur ? Il ne pourra plus ouvrir les données."))return;try{await db.doc('users/'+id).delete();vUsers()}catch(x){alert(friendly(x))}}
 
 /* ============ INSTALLATION (PWA) ============ */
 let _dip=null;
@@ -493,7 +685,7 @@ async function installApp(){
 }
 if('serviceWorker' in navigator&&location.protocol.startsWith('http')){window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}
 showInst();
-render();
+if(CLOUD)initCloud();else render();
 </script>
 </body>
 </html>
