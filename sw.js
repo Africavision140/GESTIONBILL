@@ -1,6 +1,6 @@
 // Incrémenter CACHE_VERSION à chaque modification de index.html
-const CACHE_VERSION = 'bill-ecole-v7';
-const FILES = ['./', './index.html', './manifest.webmanifest', './firebase-config.js', './icon-192.png', './icon-512.png', './icon-maskable-192.png', './icon-maskable-512.png'];
+const CACHE_VERSION = 'bill-ecole-v9';
+const FILES = ['./', './index.html', './manifest.json', './firebase-config.js', './icon-192.png', './icon-512.png', './icon-maskable-192.png', './icon-maskable-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE_VERSION).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
