@@ -94,7 +94,7 @@ const EXP_CATS=['Salaire','Loyer','Électricité / Eau','Fournitures','Entretien
 function defaults(){return{
   settings:{name:"BILL-ÉCOLE",address:"Conakry, Guinée",phone:"",year:"2026-2027",currency:"GNF",
     subjects:[{n:"Mathématiques",c:4},{n:"Français",c:4},{n:"Anglais",c:2},{n:"Sciences",c:3},{n:"Histoire-Géographie",c:2},{n:"Éducation civique",c:1},{n:"EPS",c:1}]},
-  classes:[],students:[],teachers:[],payments:[],expenses:[],grades:{},att:{},counter:0,mat:0
+  classes:[],students:[],teachers:[],payments:[],expenses:[],deposits:[],grades:{},att:{},counter:0,mat:0
 }}
 function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&d.settings)return d}catch(e){}return defaults()}
 const CFG=window.FIREBASE_CONFIG||{};
@@ -102,6 +102,7 @@ const CLOUD=!!(CFG.apiKey&&!/^REMPLACER/i.test(CFG.apiKey));
 const LEGACY=load();
 let S=CLOUD?defaults():LEGACY;
 if(S.settings.name==='Mon École Privée')S.settings.name='BILL-ÉCOLE';
+S.deposits=S.deposits||[];
 const logo=()=>S.settings.logo||LOGO_DEFAULT;
 const logoImg=(sz,st)=>`<img src="${logo()}" style="width:${sz}px;height:${sz}px;border-radius:50%;object-fit:cover;vertical-align:middle;${st||''}">`;
 function save(){if(CLOUD){cloudPush();return}try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){alert("Espace de stockage plein : faites une sauvegarde JSON et réduisez le nombre de photos.")}}
@@ -207,7 +208,7 @@ function printCards(list){list=list||S.teachers;if(!list.length){alert('Aucun pr
 /* ============ NAVIGATION ============ */
 const PAGES=[
  ['dashboard','📊','Tableau de bord'],['eleves','👥','Élèves'],['classes','🏫','Classes'],['profs','👩‍🏫','Professeurs'],
- ['paiements','💳','Paiements'],['compta','📒','Comptabilité'],['notes','📝','Notes'],['bulletins','📄','Bulletins'],
+ ['paiements','💳','Paiements'],['compta','📒','Comptabilité'],['banque','🏦','Banque'],['notes','📝','Notes'],['bulletins','📄','Bulletins'],
  ['presences','✅','Présences'],['params','⚙️','Paramètres'],['users','👤','Utilisateurs']];
 let page='dashboard';
 function go(p){if(!pageOK(p))p=defaultPage();page=p;document.getElementById('side').classList.remove('open');render()}
@@ -219,14 +220,14 @@ function render(){
   document.getElementById('title').textContent=PAGES.find(p=>p[0]===page)[2];
   document.getElementById('topact').innerHTML='';
   if(CLOUD&&!READY){document.getElementById('view').innerHTML='<div class="card empty">Chargement des données…</div>';return}
-  ({dashboard:vDash,eleves:vEleves,classes:vClasses,profs:vProfs,paiements:vPay,compta:vCompta,notes:vNotes,bulletins:vBull,presences:vPres,params:vParams,users:vUsers})[page]();
+  ({dashboard:vDash,eleves:vEleves,classes:vClasses,profs:vProfs,paiements:vPay,compta:vCompta,banque:vBanque,notes:vNotes,bulletins:vBull,presences:vPres,params:vParams,users:vUsers})[page]();
   applyRole();
 }
 
 /* ============ TABLEAU DE BORD ============ */
 function vDash(){
   const act=active();
-  const rec=sum(S.payments.map(p=>p.amount)),dep=sum(S.expenses.map(e=>e.amount));
+  const rec=sum(S.payments.map(p=>p.amount)),dep=sum(S.expenses.map(e=>e.amount)),bk=sum(S.deposits.map(d=>d.amount));
   const due_=sum(act.map(s=>Math.max(0,balance(s))));
   const months={};
   S.payments.forEach(p=>{const m=p.date.slice(0,7);months[m]=(months[m]||0)+p.amount});
@@ -239,7 +240,8 @@ function vDash(){
    <div class="card kpi"><span>Professeurs</span><b>${S.teachers.length}</b></div>
    <div class="card kpi"><span>Total encaissé</span><b style="color:var(--ok)">${fmt(rec)}</b></div>
    <div class="card kpi"><span>Dépenses</span><b style="color:var(--bad)">${fmt(dep)}</b></div>
-   <div class="card kpi"><span>Solde de caisse</span><b>${fmt(rec-dep)}</b></div>
+   <div class="card kpi"><span>Solde de caisse</span><b>${fmt(rec-dep-bk)}</b></div>
+   <div class="card kpi"><span>Déposé en banque</span><b style="color:var(--pri)">${fmt(bk)}</b></div>
    <div class="card kpi"><span>Impayés de scolarité</span><b style="color:var(--warn)">${fmt(due_)}</b><span>Recouvrement : ${rate}%</span></div>
   </div>
   <div class="grid two">
@@ -379,14 +381,15 @@ function vCompta(){
 function ledger(m){
   const r=S.payments.filter(p=>!m||p.date.startsWith(m)).map(p=>({date:p.date,kind:'in',cat:p.type,label:fullname(stu(p.studentId))+' – '+p.ref,amount:p.amount}));
   const d=S.expenses.filter(e=>!m||e.date.startsWith(m)).map(e=>({id:e.id,date:e.date,kind:'out',cat:e.category,label:e.label,amount:e.amount}));
-  return r.concat(d).sort((a,b)=>b.date.localeCompare(a.date));
+  const b=S.deposits.filter(x=>!m||x.date.startsWith(m)).map(x=>({date:x.date,kind:'bank',cat:'Dépôt en banque',label:x.bank+(x.ref?' – bordereau '+x.ref:''),amount:x.amount}));
+  return r.concat(d,b).sort((a,b)=>b.date.localeCompare(a.date));
 }
 function fillCompta(){
   const m=document.getElementById('cm').value,L=ledger(m);
-  const rin=sum(L.filter(x=>x.kind==='in').map(x=>x.amount)),rout=sum(L.filter(x=>x.kind==='out').map(x=>x.amount));
+  const rin=sum(L.filter(x=>x.kind==='in').map(x=>x.amount)),rout=sum(L.filter(x=>x.kind==='out').map(x=>x.amount)),rbk=sum(L.filter(x=>x.kind==='bank').map(x=>x.amount));
   const byCat={};L.filter(x=>x.kind==='out').forEach(x=>byCat[x.cat]=(byCat[x.cat]||0)+x.amount);
-  document.getElementById('cbody').innerHTML=`<div class="grid kpis"><div class="card kpi"><span>Recettes</span><b style="color:var(--ok)">${fmt(rin)}</b></div><div class="card kpi"><span>Dépenses</span><b style="color:var(--bad)">${fmt(rout)}</b></div><div class="card kpi"><span>Résultat</span><b>${fmt(rin-rout)}</b></div></div>
-  <div class="grid two"><div class="card tw"><b>Journal</b>${L.length?`<table><tr><th>Date</th><th>Catégorie</th><th>Libellé</th><th>Entrée</th><th>Sortie</th><th></th></tr>${L.map(x=>`<tr><td>${fdate(x.date)}</td><td>${esc(x.cat)}</td><td>${esc(x.label)}</td><td style="color:var(--ok)">${x.kind==='in'?fmt(x.amount):''}</td><td style="color:var(--bad)">${x.kind==='out'?fmt(x.amount):''}</td><td>${x.id?`<button class="btn sm red" onclick="delExp('${x.id}')">×</button>`:''}</td></tr>`).join('')}</table>`:'<div class="empty">Aucune écriture</div>'}</div>
+  document.getElementById('cbody').innerHTML=`<div class="grid kpis"><div class="card kpi"><span>Recettes</span><b style="color:var(--ok)">${fmt(rin)}</b></div><div class="card kpi"><span>Dépenses</span><b style="color:var(--bad)">${fmt(rout)}</b></div><div class="card kpi"><span>Résultat</span><b>${fmt(rin-rout)}</b></div><div class="card kpi"><span>Déposé en banque</span><b style="color:var(--pri)">${fmt(rbk)}</b></div><div class="card kpi"><span>Solde de caisse</span><b>${fmt(rin-rout-rbk)}</b></div></div>
+  <div class="grid two"><div class="card tw"><b>Journal</b>${L.length?`<table><tr><th>Date</th><th>Catégorie</th><th>Libellé</th><th>Entrée</th><th>Sortie</th><th></th></tr>${L.map(x=>`<tr><td>${fdate(x.date)}</td><td>${esc(x.cat)}</td><td>${esc(x.label)}</td><td style="color:var(--ok)">${x.kind==='in'?fmt(x.amount):''}</td><td style="color:${x.kind==='bank'?'var(--pri)':'var(--bad)'}">${x.kind!=='in'?fmt(x.amount):''}</td><td>${x.id?`<button class="btn sm red" onclick="delExp('${x.id}')">×</button>`:''}</td></tr>`).join('')}</table>`:'<div class="empty">Aucune écriture</div>'}</div>
   <div class="card"><b>Dépenses par catégorie</b><table>${Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${esc(k)}</td><td style="text-align:right">${fmt(v)}</td></tr>`).join('')||'<tr><td class="empty">—</td></tr>'}</table></div></div>`;
 }
 function formExp(){
@@ -397,8 +400,34 @@ function formExp(){
 }
 function delExp(id){if(confirm('Supprimer cette dépense ?')){S.expenses=S.expenses.filter(e=>e.id!==id);save();render()}}
 function exportCompta(){
-  const m=document.getElementById('cm').value,rows=[['Date','Type','Catégorie','Libellé','Montant']].concat(ledger(m).map(x=>[x.date,x.kind==='in'?'Recette':'Dépense',x.cat,x.label,x.amount]));
+  const m=document.getElementById('cm').value,rows=[['Date','Type','Catégorie','Libellé','Montant']].concat(ledger(m).map(x=>[x.date,x.kind==='in'?'Recette':x.kind==='bank'?'Dépôt banque':'Dépense',x.cat,x.label,x.amount]));
   downloadFile('comptabilite.csv','\ufeff'+rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(';')).join('\n'),'text/csv');
+}
+
+/* ============ BANQUE (dépôts d'argent) ============ */
+const BANKS=['BICIGUI','Ecobank','Société Générale Guinée','Vista Bank','Afriland First Bank','UBA','Orabank','BNG','Banque Islamique de Guinée'];
+function cashBalance(){return sum(S.payments.map(p=>p.amount))-sum(S.expenses.map(e=>e.amount))-sum(S.deposits.map(d=>d.amount))}
+function vBanque(){
+  document.getElementById('topact').innerHTML='<button class="btn" onclick="formDeposit()">+ Dépôt en banque</button>';
+  const L=S.deposits.slice().sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)));
+  const mo=today().slice(0,7),tot=sum(L.map(d=>d.amount)),mm=sum(L.filter(d=>d.date.startsWith(mo)).map(d=>d.amount));
+  const byBank={};L.forEach(d=>byBank[d.bank]=(byBank[d.bank]||0)+d.amount);
+  document.getElementById('view').innerHTML=`<div class="grid kpis"><div class="card kpi"><span>Solde de caisse (à déposer)</span><b>${fmt(cashBalance())}</b></div><div class="card kpi"><span>Total déposé en banque</span><b style="color:var(--pri)">${fmt(tot)}</b></div><div class="card kpi"><span>Déposé ce mois</span><b>${fmt(mm)}</b></div></div>
+  <div class="grid two"><div class="card tw"><b>Dépôts</b>${L.length?`<table><tr><th>Date</th><th>Banque</th><th>N° bordereau</th><th>Montant</th><th>Déposé par</th><th></th></tr>${L.map(d=>`<tr><td>${fdate(d.date)}</td><td>${esc(d.bank)}${d.note?'<br><small style="color:var(--muted)">'+esc(d.note)+'</small>':''}</td><td>${esc(d.ref||'—')}</td><td><b>${fmt(d.amount)}</b></td><td>${esc(d.by||'')}</td><td><div class="act"><button class="btn sm ghost" onclick="printDeposit('${d.id}')">Bordereau</button><button class="btn sm red" onclick="delDeposit('${d.id}')">×</button></div></td></tr>`).join('')}</table>`:'<div class="empty">Aucun dépôt enregistré</div>'}</div>
+  <div class="card"><b>Total par banque</b><table>${Object.entries(byBank).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${esc(k)}</td><td style="text-align:right">${fmt(v)}</td></tr>`).join('')||'<tr><td class="empty">—</td></tr>'}</table></div></div>`;
+}
+function formDeposit(){
+  const banks=Array.from(new Set(S.deposits.map(d=>d.bank).concat(BANKS)));
+  modal(`<h3>Dépôt d'argent en banque</h3><p style="color:var(--muted);margin-top:-6px">Solde de caisse actuel : <b>${fmt(cashBalance())}</b></p><form id="fd"><label>Banque<input name="bank" list="banks" required placeholder="Choisir ou saisir une banque"><datalist id="banks">${banks.map(b=>`<option value="${esc(b)}">`).join('')}</datalist></label><label>Montant déposé (${esc(S.settings.currency)})<input name="amount" type="number" min="1" step="any" required></label><label>N° du bordereau de versement<input name="ref"></label><label>Date<input name="date" type="date" value="${today()}" required></label><label>Note (facultatif)<input name="note"></label><div class="row"><button type="button" class="btn ghost" onclick="closeM()">Annuler</button><button class="btn">Enregistrer</button></div></form>`);
+  document.getElementById('fd').onsubmit=e=>{e.preventDefault();const f=new FormData(e.target),a=+f.get('amount');
+    if(a>cashBalance()&&!confirm("Ce montant dépasse le solde de caisse ("+fmt(cashBalance())+"). Enregistrer quand même ?"))return;
+    S.deposits.push({id:uid(),bank:f.get('bank').trim(),amount:a,ref:f.get('ref').trim(),date:f.get('date'),note:f.get('note').trim(),by:(typeof ME!=='undefined'&&ME&&ME.name)||''});
+    closeM();save();render()};
+}
+function delDeposit(id){if(confirm('Supprimer ce dépôt ?')){S.deposits=S.deposits.filter(d=>d.id!==id);save();render()}}
+function printDeposit(id){
+  const d=S.deposits.find(x=>x.id===id);
+  printHTML('Bordereau de dépôt',`<div style="position:relative;min-height:420px">${watermark()}${schoolHeader('BORDEREAU DE DÉPÔT EN BANQUE')}<table><tr><th>Date</th><td>${fdate(d.date)}</td></tr><tr><th>Banque</th><td>${esc(d.bank)}</td></tr><tr><th>N° bordereau de la banque</th><td>${esc(d.ref||'—')}</td></tr><tr><th>Montant déposé</th><td><b>${fmt(d.amount)}</b></td></tr><tr><th>Déposé par</th><td>${esc(d.by||'')}</td></tr>${d.note?`<tr><th>Note</th><td>${esc(d.note)}</td></tr>`:''}</table><div class="sig"><div>Le caissier</div><div>La direction (cachet &amp; signature)</div></div></div>`);
 }
 
 /* ============ NOTES ============ */
@@ -475,7 +504,7 @@ function vParams(){
 function fillSubj(){document.getElementById('subj').innerHTML=`<table>${S.settings.subjects.map((x,i)=>`<tr><td>${esc(x.n)}</td><td style="width:70px"><input type="number" min="1" value="${x.c}" onchange="S.settings.subjects[${i}].c=+this.value||1;save()"></td><td><button class="btn sm red" onclick="S.settings.subjects.splice(${i},1);save();fillSubj()">×</button></td></tr>`).join('')}</table>`}
 function addSubject(){openForm('Nouvelle matière',[{k:'n',l:'Matière',r:1},{k:'c',l:'Coefficient',t:'number',d:1}],{},d=>{S.settings.subjects.push({n:d.n,c:+d.c||1})})}
 function backup(){downloadFile('ecolegest-sauvegarde-'+today()+'.json',JSON.stringify(S),'application/json')}
-function restore(f){if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.settings)throw 0;S=d;save();render();alert('Sauvegarde restaurée.')}catch(e){alert('Fichier invalide.')}};r.readAsText(f)}
+function restore(f){if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.settings)throw 0;S=d;S.deposits=S.deposits||[];save();render();alert('Sauvegarde restaurée.')}catch(e){alert('Fichier invalide.')}};r.readAsText(f)}
 function resetAll(){if(confirm(CLOUD?'Effacer TOUTES les données EN LIGNE pour tous les utilisateurs ? Cette action est irréversible.':'Effacer TOUTES les données ? Cette action est irréversible.')&&confirm('Vraiment tout effacer ?')){S=defaults();save();render()}}
 function demo(){
   if(S.students.length&&!confirm('Ajouter des données de démo aux données existantes ?'))return;
@@ -493,11 +522,11 @@ function demo(){
 
 /* ============ CLOUD (FIREBASE) : connexion, rôles, synchronisation ============ */
 let ME=null,db=null,auth=null,READY=false,BUSY=false,UNSUBS=[],LAST={},PENDING=new Set(),RT=null;
-const ROLE_LABEL={direction:'Direction',comptable:'Comptable',professeur:'Professeur'};
-const ROLE_PAGES={comptable:['dashboard','eleves','profs','paiements','compta','bulletins'],professeur:['eleves','notes','bulletins','presences']};
-const ROLE_READ={direction:['classes','students','teachers','payments','expenses','grades','att'],comptable:['classes','students','teachers','payments','expenses','grades','att'],professeur:['classes','students','grades','att']};
-const ROLE_WRITE={comptable:['students','payments','expenses','meta/counters'],professeur:['grades','att']};
-const DENY={professeur:['formStudent','delStudent','viewStudent','exportStudents'],comptable:['formClass','delClass','formTeacher','delTeacher']};
+const ROLE_LABEL={direction:'Direction',comptable:'Comptable',caissier:'Caissier',professeur:'Professeur'};
+const ROLE_PAGES={comptable:['dashboard','eleves','profs','paiements','compta','banque','bulletins'],caissier:['dashboard','eleves','profs','paiements','compta','banque'],professeur:['eleves','notes','bulletins','presences']};
+const ROLE_READ={direction:['classes','students','teachers','payments','expenses','deposits','grades','att'],comptable:['classes','students','teachers','payments','expenses','deposits','grades','att'],caissier:['classes','students','teachers','payments','expenses','deposits'],professeur:['classes','students','grades','att']};
+const ROLE_WRITE={comptable:['students','payments','expenses','meta/counters'],caissier:['payments','expenses','deposits','meta/counters'],professeur:['grades','att']};
+const DENY={professeur:['formStudent','delStudent','viewStudent','exportStudents'],comptable:['formClass','delClass','formTeacher','delTeacher','formDeposit','delDeposit'],caissier:['formStudent','delStudent','formClass','delClass','formTeacher','delTeacher']};
 const role=()=>ME?ME.role:'direction';
 function pageOK(p){if(p==='users')return CLOUD&&role()==='direction';const l=ROLE_PAGES[role()];return !l||l.includes(p)}
 const visiblePages=()=>PAGES.filter(p=>pageOK(p[0]));
@@ -612,7 +641,7 @@ function afterReady(){
 }
 function importLegacy(skipConfirm){
   if(!skipConfirm&&!confirm("Remplacer les données en ligne par celles de cet appareil ? Les données en ligne actuelles seront effacées."))return;
-  ['classes','students','teachers','payments','expenses'].forEach(c=>{S[c].length=0;(LEGACY[c]||[]).forEach(o=>S[c].push(o))});
+  ['classes','students','teachers','payments','expenses','deposits'].forEach(c=>{S[c].length=0;(LEGACY[c]||[]).forEach(o=>S[c].push(o))});
   S.grades=Object.assign({},LEGACY.grades);S.att=Object.assign({},LEGACY.att);
   Object.assign(S.settings,LEGACY.settings);if(S.settings.name==='Mon École Privée')S.settings.name='BILL-ÉCOLE';
   ['counter','mat','tmat'].forEach(k=>S[k]=LEGACY[k]||0);
@@ -623,7 +652,7 @@ function importLegacy(skipConfirm){
 /* --- envoi des modifications (seulement ce qui a changé) --- */
 function cloudItems(){
   const m={};
-  ['classes','students','teachers','payments','expenses'].forEach(c=>S[c].forEach(o=>m[c+'/'+o.id]=o));
+  ['classes','students','teachers','payments','expenses','deposits'].forEach(c=>(S[c]||[]).forEach(o=>m[c+'/'+o.id]=o));
   const g={};Object.keys(S.grades).forEach(k=>{const i=k.indexOf('|');(g[k.slice(0,i)]=g[k.slice(0,i)]||{})[k.slice(i+1)]=S.grades[k]});
   Object.keys(g).forEach(sid=>m['grades/'+sid]={g:g[sid]});
   Object.keys(S.att).forEach(k=>{const [d,c]=k.split('|');m['att/'+d+'_'+c]={d:d,c:c,r:S.att[k]}});
@@ -651,11 +680,11 @@ async function vUsers(){
     const snap=await db.collection('users').get(),rows=[];snap.forEach(d=>rows.push(Object.assign({id:d.id},d.data())));
     if(page!=='users')return;
     v.innerHTML=`<div class="card tw"><table><tr><th>Nom</th><th>E-mail</th><th>Rôle</th><th></th></tr>${rows.map(u=>`<tr><td><b>${esc(u.name||'')}</b></td><td>${esc(u.email||'')}</td><td><span class="tag ${u.role==='direction'?'ok':'warn'}">${esc(ROLE_LABEL[u.role]||u.role)}</span></td><td>${u.id===ME.uid?'<small style="color:var(--muted)">(vous)</small>':`<div class="act"><button class="btn sm ghost" onclick="chgRole('${u.id}','${esc(u.role)}')">Changer le rôle</button><button class="btn sm red" onclick="rmUser('${u.id}')">Retirer l'accès</button></div>`}</td></tr>`).join('')}</table></div>
-    <div class="card" style="margin-top:14px;font-size:13px;color:var(--muted)"><b style="color:var(--ink)">Rôles</b><br><b>Direction</b> : tout.<br><b>Comptable</b> : élèves, paiements, comptabilité, salaires, bulletins (lecture).<br><b>Professeur</b> : élèves (sans les montants), notes, présences, bulletins.</div>`;
+    <div class="card" style="margin-top:14px;font-size:13px;color:var(--muted)"><b style="color:var(--ink)">Rôles</b><br><b>Direction</b> : tout.<br><b>Comptable</b> : élèves, paiements, comptabilité, banque (lecture), salaires, bulletins (lecture).<br><b>Caissier</b> : comptabilité, encaissements, paiements (dépenses et salaires) et dépôts en banque. Il ne modifie pas les élèves.<br><b>Professeur</b> : élèves (sans les montants), notes, présences, bulletins.</div>`;
   }catch(e){v.innerHTML='<div class="card empty">Erreur : '+esc(friendly(e))+'</div>'}
 }
 function formUser(){
-  modal(`<h3>Nouvel utilisateur</h3><form onsubmit="saveUser(event)"><label>Nom complet<input name="name" required></label><label>Adresse e-mail<input name="email" type="email" required></label><label>Mot de passe provisoire (6 caractères min.)<input name="password" type="text" minlength="6" required></label><label>Rôle<select name="role"><option value="professeur">Professeur</option><option value="comptable">Comptable</option><option value="direction">Direction</option></select></label><div class="row"><button type="button" class="btn ghost" onclick="closeM()">Annuler</button><button class="btn">Créer le compte</button></div></form>`);
+  modal(`<h3>Nouvel utilisateur</h3><form onsubmit="saveUser(event)"><label>Nom complet<input name="name" required></label><label>Adresse e-mail<input name="email" type="email" required></label><label>Mot de passe provisoire (6 caractères min.)<input name="password" type="text" minlength="6" required></label><label>Rôle<select name="role"><option value="professeur">Professeur</option><option value="comptable">Comptable</option><option value="caissier">Caissier</option><option value="direction">Direction</option></select></label><div class="row"><button type="button" class="btn ghost" onclick="closeM()">Annuler</button><button class="btn">Créer le compte</button></div></form>`);
 }
 async function saveUser(e){
   e.preventDefault();const f=new FormData(e.target),d={name:f.get('name').trim(),email:f.get('email').trim(),password:f.get('password'),role:f.get('role')};
@@ -668,7 +697,7 @@ async function saveUser(e){
   }catch(x){btn.disabled=false;btn.textContent='Créer le compte';alert(friendly(x))}
   finally{try{await app2.delete()}catch(_){}}
 }
-async function chgRole(id,cur){const r=prompt('Nouveau rôle (direction, comptable ou professeur) :',cur);if(!r||!ROLE_LABEL[r.trim()])return;try{await db.doc('users/'+id).update({role:r.trim()});vUsers()}catch(x){alert(friendly(x))}}
+async function chgRole(id,cur){const r=prompt('Nouveau rôle (direction, comptable, caissier ou professeur) :',cur);if(!r||!ROLE_LABEL[r.trim()])return;try{await db.doc('users/'+id).update({role:r.trim()});vUsers()}catch(x){alert(friendly(x))}}
 async function rmUser(id){if(!confirm("Retirer l'accès de cet utilisateur ? Il ne pourra plus ouvrir les données."))return;try{await db.doc('users/'+id).delete();vUsers()}catch(x){alert(friendly(x))}}
 
 /* ============ INSTALLATION (PWA) ============ */
