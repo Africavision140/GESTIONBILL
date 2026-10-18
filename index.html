@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1f4fd8">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="BILL-ÉCOLE">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<script src="firebase-config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<title>BILL-ÉCOLE – Gestion d'école privée</title>
+<style>
+:root{--bg:#f4f6fb;--card:#fff;--ink:#1c2540;--muted:#6b7694;--line:#e4e8f2;--pri:#1f4fd8;--pri2:#e8eefc;--ok:#12a060;--warn:#e89b0c;--bad:#d9342b;--side:#14203f}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+#app{display:flex;min-height:100vh}
+aside{width:230px;background:var(--side);color:#cfd8f5;padding:18px 12px;position:fixed;top:0;bottom:0;overflow:auto;z-index:20;transition:transform .2s}
+aside h1{font-size:17px;color:#fff;margin:0 8px 4px}
+aside small{display:block;margin:0 8px 18px;color:#8e9bc4;font-size:11px}
+aside a{display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:9px;color:#cfd8f5;text-decoration:none;cursor:pointer;margin-bottom:2px}
+aside a:hover{background:#1f2f5c}
+aside a.on{background:var(--pri);color:#fff}
+main{margin-left:230px;flex:1;padding:22px;min-width:0}
+.top{display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap}
+.top h2{margin:0;font-size:22px;flex:1}
+#menu{display:none;border:0;background:var(--pri);color:#fff;border-radius:8px;padding:8px 12px;font-size:16px}
+.grid{display:grid;gap:14px}
+.kpis{grid-template-columns:repeat(auto-fit,minmax(170px,1fr));margin-bottom:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+.kpi b{display:block;font-size:22px;margin-top:4px}
+.kpi span{color:var(--muted);font-size:12px}
+.two{grid-template-columns:2fr 1fr}
+.btn{background:var(--pri);color:#fff;border:0;border-radius:8px;padding:9px 14px;cursor:pointer;font-size:13px;font-weight:600}
+.btn.ghost{background:var(--pri2);color:var(--pri)}
+.btn.red{background:#fde8e6;color:var(--bad)}
+.btn.sm{padding:5px 9px;font-size:12px}
+.bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+input,select{padding:9px 10px;border:1px solid var(--line);border-radius:8px;font-size:14px;background:#fff;width:100%}
+.bar input,.bar select{width:auto;min-width:160px}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;color:var(--muted);font-size:12px;font-weight:600;padding:8px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+.tw{overflow-x:auto}
+.tag{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:700}
+.tag.ok{background:#e0f6ec;color:var(--ok)}.tag.warn{background:#fff2d9;color:#b06f00}.tag.bad{background:#fde8e6;color:var(--bad)}
+.act{display:flex;gap:5px;flex-wrap:wrap}
+#modal{position:fixed;inset:0;background:rgba(15,23,50,.5);display:none;align-items:center;justify-content:center;z-index:50;padding:14px}
+#modal.on{display:flex}
+.box{background:#fff;border-radius:14px;padding:20px;width:100%;max-width:520px;max-height:90vh;overflow:auto}
+.box.wide{max-width:760px}
+.box h3{margin:0 0 12px}
+.box label{display:block;margin-bottom:10px;font-size:12px;color:var(--muted);font-weight:600}
+.box label input,.box label select{margin-top:4px;color:var(--ink);font-weight:400}
+.row{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+.chart{display:flex;align-items:flex-end;gap:10px;height:170px;padding-top:8px}
+.chart div{flex:1;text-align:center;font-size:11px;color:var(--muted);display:flex;flex-direction:column;justify-content:flex-end;height:100%}
+.chart i{display:block;background:var(--pri);border-radius:6px 6px 0 0;min-height:2px}
+.prog{height:7px;background:var(--line);border-radius:9px;overflow:hidden;min-width:70px}
+.prog i{display:block;height:100%;background:var(--ok)}
+.empty{text-align:center;color:var(--muted);padding:26px}
+.seg button{border:1px solid var(--line);background:#fff;padding:5px 10px;cursor:pointer;font-size:12px}
+.seg button.p.on{background:var(--ok);color:#fff}.seg button.a.on{background:var(--bad);color:#fff}.seg button.r.on{background:var(--warn);color:#fff}
+.seg button:first-child{border-radius:7px 0 0 7px}.seg button:last-child{border-radius:0 7px 7px 0}
+@media(max-width:860px){aside{transform:translateX(-100%)}aside.open{transform:none}main{margin-left:0;padding:14px}#menu{display:block}.two{grid-template-columns:1fr}}
+.bpv{border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px;background:#fff;font-size:13px;color:#111}
+.bpv .hd{display:flex;justify-content:space-between;border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:14px}
+.bpv h1{margin:0;font-size:19px}.bpv .sig{display:flex;justify-content:space-between;margin-top:40px}
+.bpv table{margin:10px 0}.bpv th,.bpv td{border:1px solid #999;padding:5px 8px;color:#111;font-size:12px}.bpv th{background:#eee}
+.lvl{margin:20px 0 6px;font-size:15px;color:var(--pri)}.lvl small{color:var(--muted);font-weight:400}
+</style>
+</head>
+<body>
+<div id="app">
+<aside id="side"></aside>
+<main>
+  <div class="top"><button id="menu" onclick="document.getElementById('side').classList.toggle('open')">☰</button><h2 id="title"></h2><div id="topact"></div><button id="inst" class="btn ghost" style="display:none" onclick="installApp()">📲 Installer l'application</button></div>
+  <div id="view"></div>
+</main>
+</div>
+<div id="modal"></div>
+<div id="auth" style="position:fixed;inset:0;background:linear-gradient(135deg,#14203f,#1f4fd8);z-index:100;align-items:center;justify-content:center;padding:14px;display:none"></div>
+
+<script>
+/* ============ DONNÉES ============ */
+const KEY='ecolegest_v1';
+const APP_VERSION='11 – installation renforcée';
+const LOGO_DEFAULT='data:image/jpeg;base64,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';
+const TERMS=['Trimestre 1','Trimestre 2','Trimestre 3'];
+const PAY_TYPES=['Scolarité','Inscription','Cantine','Transport','Uniforme','Autre'];
+const MODES=['Espèces','Orange Money','MTN MoMo','Virement','Chèque'];
+const EXP_CATS=['Salaire','Loyer','Électricité / Eau','Fournitures','Entretien','Internet / Téléphone','Transport','Autre'];
+
+function defaults(){return{
+  settings:{name:"BILL-ÉCOLE",address:"Conakry, Guinée",phone:"",year:"2026-2027",currency:"GNF",
+    subjects:[{n:"Mathématiques",c:4},{n:"Français",c:4},{n:"Anglais",c:2},{n:"Sciences",c:3},{n:"Histoire-Géographie",c:2},{n:"Éducation civique",c:1},{n:"EPS",c:1}]},
+  classes:[],students:[],teachers:[],payments:[],expenses:[],deposits:[],grades:{},att:{},counter:0,mat:0
+}}
+function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&d.settings)return d}catch(e){}return defaults()}
+const CFG=window.FIREBASE_CONFIG||{};
+const CLOUD=!!(CFG.apiKey&&!/^REMPLACER/i.test(CFG.apiKey));
+const LEGACY=load();
+let S=CLOUD?defaults():LEGACY;
+if(S.settings.name==='Mon École Privée')S.settings.name='BILL-ÉCOLE';
+S.deposits=S.deposits||[];
+const logo=()=>S.settings.logo||LOGO_DEFAULT;
+const logoImg=(sz,st)=>`<img src="${logo()}" style="width:${sz}px;height:${sz}px;border-radius:50%;object-fit:cover;vertical-align:middle;${st||''}">`;
+function save(){if(CLOUD){cloudPush();return}try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){alert("Espace de stockage plein : faites une sauvegarde JSON et réduisez le nombre de photos.")}}
+
+/* ============ OUTILS ============ */
+const uid=()=>Math.random().toString(36).slice(2,9);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=n=>new Intl.NumberFormat('fr-FR').format(Math.round(n||0))+' '+S.settings.currency;
+const today=()=>new Date().toISOString().slice(0,10);
+const fdate=d=>d?d.split('-').reverse().join('/'):'';
+const cls=id=>S.classes.find(c=>c.id===id);
+const stu=id=>S.students.find(s=>s.id===id);
+const tch=id=>S.teachers.find(t=>t.id===id);
+const fullname=s=>s?(s.prenom+' '+s.nom):'—';
+const paidTuition=sid=>S.payments.filter(p=>p.studentId===sid&&p.type==='Scolarité').reduce((a,p)=>a+p.amount,0);
+const due=s=>Math.max(0,(cls(s.classId)?.fee||0)-(+s.remise||0));
+const balance=s=>due(s)-paidTuition(s.id);
+const sum=a=>a.reduce((x,y)=>x+y,0);
+const active=()=>S.students.filter(s=>s.status!=='Sorti');
+function closeM(){document.getElementById('modal').classList.remove('on')}
+function modal(html,wide){const m=document.getElementById('modal');m.innerHTML=`<div class="box ${wide?'wide':''}">${html}</div>`;m.classList.add('on')}
+function openForm(title,fields,vals,onSave){
+  vals=vals||{};
+  const inputs=fields.map(f=>{
+    const v=vals[f.k]??f.d??'';
+    if(f.t==='photo')return `<label>${f.l}<div style="display:flex;gap:12px;align-items:center;margin-top:4px"><div id="pv_${f.k}">${v?`<img src="${v}" style="width:72px;height:72px;border-radius:50%;object-fit:cover">`:'<div style="width:72px;height:72px;border-radius:50%;background:var(--pri2);display:flex;align-items:center;justify-content:center;font-size:26px">📷</div>'}</div><input type="file" accept="image/*" onchange="pickPhoto(this,'${f.k}')"><input type="hidden" id="ph_${f.k}" name="${f.k}" value="${esc(v)}"></div></label>`;
+    if(f.t==='select')return `<label>${f.l}<select name="${f.k}">${f.o.map(o=>`<option value="${esc(o.v)}" ${String(v)===String(o.v)?'selected':''}>${esc(o.l)}</option>`).join('')}</select></label>`;
+    return `<label>${f.l}<input name="${f.k}" type="${f.t||'text'}" value="${esc(v)}" ${f.r?'required':''} ${f.t==='number'?'min="0" step="any"':''}></label>`;
+  }).join('');
+  modal(`<h3>${title}</h3><form id="f">${inputs}<div class="row"><button type="button" class="btn ghost" onclick="closeM()">Annuler</button><button class="btn">Enregistrer</button></div></form>`);
+  document.getElementById('f').onsubmit=e=>{e.preventDefault();const d={};new FormData(e.target).forEach((v,k)=>d[k]=v);if(onSave(d)===false)return;closeM();save();render()};
+}
+function printHTML(title,body,css){
+  const w=window.open('','_blank');
+  if(!w){alert("Autorisez les fenêtres pop-up pour imprimer.");return}
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>
+  body{font-family:Arial,sans-serif;color:#111;padding:28px;max-width:780px;margin:auto;font-size:13px}
+  h1{margin:0;font-size:20px}h2{margin:18px 0 8px;font-size:16px}
+  .hd{display:flex;justify-content:space-between;border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:14px}
+  table{width:100%;border-collapse:collapse;margin:10px 0}th,td{border:1px solid #999;padding:6px 8px;text-align:left}th{background:#eee}
+  .r{text-align:right}.sig{display:flex;justify-content:space-between;margin-top:50px}
+  @media print{button{display:none}}${css||''}</style></head><body>${body}<p style="text-align:center;margin-top:30px"><button onclick="window.print()">🖨️ Imprimer</button></p></body></html>`);
+  w.document.close();
+}
+function watermark(){return `<img src="${logo()}" style="position:absolute;top:140px;left:50%;width:380px;height:380px;margin-left:-190px;border-radius:50%;object-fit:cover;opacity:.09;z-index:0;pointer-events:none;-webkit-print-color-adjust:exact;print-color-adjust:exact">`}
+function schoolHeader(sub){const s=S.settings;return `<div class="hd"><div style="display:flex;gap:12px;align-items:center"><img src="${logo()}" style="width:62px;height:62px;border-radius:50%;object-fit:cover"><div><h1>${esc(s.name)}</h1><div>${esc(s.address)}${s.phone?' · Tél : '+esc(s.phone):''}</div></div></div><div style="text-align:right"><b>${esc(sub)}</b><br>Année scolaire ${esc(s.year)}</div></div>`}
+function downloadFile(name,content,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type}));a.download=name;a.click()}
+
+/* ============ PHOTOS, BADGES, CARTES ============ */
+function pickPhoto(inp,k){
+  const f=inp.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{const im=new Image();im.onload=()=>{
+    const sz=220,c=document.createElement('canvas');c.width=c.height=sz;
+    const m=Math.min(im.width,im.height);
+    c.getContext('2d').drawImage(im,(im.width-m)/2,(im.height-m)/2,m,m,0,0,sz,sz);
+    const u=c.toDataURL('image/jpeg',.72);
+    document.getElementById('ph_'+k).value=u;
+    document.getElementById('pv_'+k).innerHTML=`<img src="${u}" style="width:72px;height:72px;border-radius:50%;object-fit:cover">`;
+  };im.src=r.result};
+  r.readAsDataURL(f);
+}
+const initials=o=>((o.prenom||'')[0]||'')+((o.nom||'')[0]||'');
+function avatar(o,sz){sz=sz||38;return o.photo?`<img src="${o.photo}" style="width:${sz}px;height:${sz}px;border-radius:50%;object-fit:cover;vertical-align:middle">`:`<span style="display:inline-flex;width:${sz}px;height:${sz}px;border-radius:50%;background:var(--pri2);color:var(--pri);align-items:center;justify-content:center;font-weight:700;font-size:${Math.round(sz/2.6)}px;vertical-align:middle">${esc(initials(o)).toUpperCase()}</span>`}
+/* --- matricules : SAISIE MANUELLE uniquement (matricule officiel du Ministère de l'Éducation) ; la plateforme n'en fournit aucun --- */
+const AUTO_MAT=/^[EP]\d{8}$/;
+const tmat=()=>'';
+function matFields(o,label){return [{k:'matricule',l:label+' – saisie manuelle (Ministère de l\'Éducation)'}]}
+const matVals=o=>o;
+function matSetup(){const i=document.querySelector('#f [name=matricule]');if(i)i.placeholder='Laisser vide si pas encore attribué'}
+function matResolve(d,list,id){
+  const m=(d.matricule||'').trim();
+  if(m){
+    const dup=list.find(x=>x.id!==id&&String(x.matricule||'').toLowerCase()===m.toLowerCase());
+    if(dup){alert('Ce matricule est déjà attribué à '+fullname(dup)+'.');return false}
+  }
+  d.matricule=m;return true;
+}
+function clearAutoMat(){
+  const all=S.students.concat(S.teachers).filter(o=>AUTO_MAT.test(o.matricule||''));
+  if(!all.length){alert('Aucun matricule généré automatiquement.');return}
+  if(!confirm(all.length+" matricule(s) générés par l'ancienne numérotation (ex. E20260001) vont être effacés pour que vous saisissiez les matricules officiels. Continuer ?"))return;
+  all.forEach(o=>o.matricule='');save();render();toast('Matricules automatiques effacés.');
+}
+const PRINT_CSS=`@page{margin:8mm}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}body{max-width:none!important}
+.badge{width:54mm;height:85.6mm;border:.3mm solid #333;border-radius:3mm;overflow:hidden;display:inline-block;margin:2mm;vertical-align:top;position:relative;background:#fff;text-align:center;page-break-inside:avoid}
+.bh{background:#1f4fd8;color:#fff;padding:2mm;font-size:9pt;font-weight:bold;line-height:1.2}
+.bh .lg{width:9mm;height:9mm;border-radius:50%;object-fit:cover;border:.5mm solid #fff;margin:0 auto 1mm;display:inline-block}
+.bh small{font-weight:normal;font-size:6.5pt;letter-spacing:.5px}
+.badge>img,.badge .ph{width:21mm;height:21mm;border-radius:50%;object-fit:cover;border:.8mm solid #1f4fd8;margin:2mm auto 1.5mm;display:block}
+.ph{background:#e8eefc;color:#1f4fd8;font-size:18pt;font-weight:bold;line-height:19.4mm;text-align:center}
+.nm{font-size:11pt;font-weight:bold;line-height:1.2}
+.cl{display:inline-block;background:#e8eefc;color:#1f4fd8;font-weight:bold;font-size:8pt;border-radius:2mm;padding:.6mm 3mm;margin:1.5mm 0}
+.info{font-size:6.5pt;text-align:left;padding:0 4mm;line-height:1.45}
+.ft{position:absolute;bottom:0;left:0;right:0;background:#14203f;color:#fff;font-size:5.5pt;padding:1.6mm}
+.tcard{width:85.6mm;height:54mm;border:.3mm solid #333;border-radius:3mm;overflow:hidden;display:inline-flex;margin:2mm;vertical-align:top;background:#fff;page-break-inside:avoid;font-size:6.6pt}
+.tl{width:27mm;background:#14203f;color:#fff;text-align:center;padding-top:6mm}
+.tl>img,.tl .ph{width:21mm;height:21mm;border-radius:50%;object-fit:cover;border:.8mm solid #fff;margin:0 auto 2mm;display:block}
+.tl .ph{line-height:19mm;font-size:17pt}
+.mt{font-size:6.5pt;font-weight:bold}
+.tr{flex:1;padding:2.5mm 3mm;position:relative}
+.lg2{width:5mm;height:5mm;border-radius:50%;object-fit:cover;vertical-align:middle}
+.th{font-size:5.8pt;color:#1f4fd8;font-weight:bold;border-bottom:.3mm solid #ccc;padding-bottom:1mm}
+.tn{font-size:10pt;font-weight:bold;margin-top:1.5mm}
+.tm{color:#1f4fd8;font-weight:bold;margin-bottom:1.5mm}
+.ti{line-height:1.5}
+.tf{position:absolute;bottom:1.5mm;left:3mm;right:3mm;font-size:5.2pt;color:#555;border-top:.3mm solid #ccc;padding-top:.8mm}`;
+function badgeHTML(s){
+  const st=S.settings,c=cls(s.classId);
+  const ph=s.photo?`<img src="${s.photo}">`:`<div class="ph">${esc(initials(s)).toUpperCase()}</div>`;
+  return `<div class="badge"><div class="bh"><img class="lg" src="${logo()}"><br>${esc(st.name)}<br><small>BADGE ÉLÈVE · ${esc(st.year)}</small></div>${ph}<div class="nm">${esc(s.prenom)}<br>${esc(s.nom).toUpperCase()}</div><div class="cl">${esc(c?c.name:'')}</div><div class="info"><b>Matricule :</b> ${esc(s.matricule||'—')}<br><b>Né(e) le :</b> ${fdate(s.naissance)||'—'}<br><b>Sexe :</b> ${s.sexe==='F'?'Féminin':'Masculin'}<br><b>Parent :</b> ${esc(s.parent||'—')}<br><b>Tél. parent :</b> ${esc(s.tel||'—')}</div><div class="ft">${esc(st.address)}${st.phone?' · '+esc(st.phone):''}</div></div>`;
+}
+function cardHTML(t){
+  const st=S.settings,tit=S.classes.filter(c=>c.teacherId===t.id).map(c=>c.name).join(', ');
+  const ph=t.photo?`<img src="${t.photo}">`:`<div class="ph">${esc(initials(t)).toUpperCase()}</div>`;
+  const row=(l,v)=>v?`<div><b>${l}</b> ${esc(v)}</div>`:'';
+  return `<div class="tcard"><div class="tl">${ph}<div class="mt">${esc(t.matricule||'')}</div></div><div class="tr"><div class="th"><img class="lg2" src="${logo()}"> ${esc(st.name)} · CARTE PROFESSEUR</div><div class="tn">${esc(t.prenom)} ${esc(t.nom).toUpperCase()}</div><div class="tm">${esc(t.matiere||'Enseignant')}</div><div class="ti">${row('Sexe :',t.sexe==='F'?'Féminin':t.sexe==='M'?'Masculin':'')}${row('Né(e) le :',fdate(t.naissance))}${row('Tél. :',t.tel)}${row('E-mail :',t.email)}${row('Adresse :',t.adresse)}${row('Diplôme :',t.diplome)}${row('Embauché(e) le :',fdate(t.embauche))}${row('Titulaire de :',tit)}</div><div class="tf">Année ${esc(st.year)} · ${esc(st.address)}${st.phone?' · '+esc(st.phone):''}</div></div></div>`;
+}
+function printBadges(list){list=list||window._list||[];if(!list.length){alert('Aucun élève à imprimer.');return}printHTML('Badges élèves','<div>'+list.map(badgeHTML).join('')+'</div>',PRINT_CSS)}
+function printCards(list){list=list||S.teachers;if(!list.length){alert('Aucun professeur à imprimer.');return}printHTML('Cartes professeurs','<div>'+list.map(cardHTML).join('')+'</div>',PRINT_CSS)}
+
+/* ============ NAVIGATION ============ */
+const PAGES=[
+ ['dashboard','📊','Tableau de bord'],['eleves','👥','Élèves'],['classes','🏫','Classes'],['profs','👩‍🏫','Professeurs'],
+ ['paiements','💳','Paiements'],['compta','📒','Comptabilité'],['banque','🏦','Banque'],['notes','📝','Notes'],['bulletins','📄','Bulletins'],
+ ['presences','✅','Présences'],['params','⚙️','Paramètres'],['users','👤','Utilisateurs']];
+let page='dashboard';
+function go(p){if(!pageOK(p))p=defaultPage();page=p;document.getElementById('side').classList.remove('open');render()}
+function render(){
+  const side=document.getElementById('side');
+  side.innerHTML=`<h1 style="display:flex;align-items:center;gap:9px">${logoImg(38,'border:2px solid #fff;flex:none')}<span>${esc(S.settings.name)}</span></h1><small>Année ${esc(S.settings.year)}</small>`+visiblePages().map(p=>`<a class="${p[0]===page?'on':''}" onclick="go('${p[0]}')">${p[1]} ${p[2]}</a>`).join('');
+  if(!pageOK(page))page=defaultPage();
+  if(CLOUD){side.innerHTML+=`<div style="margin:18px 8px 0;padding-top:12px;border-top:1px solid #2a3b6b;font-size:12px;color:#8e9bc4">${ME?`👤 <b style="color:#fff">${esc(ME.name||ME.email)}</b><br>${esc(ROLE_LABEL[ME.role]||ME.role)}<br>${navigator.onLine?'☁️ En ligne':'⚠️ Hors ligne : modifications en attente'}<br><a style="padding:6px 0;color:#9db7ff" onclick="auth.signOut()">Se déconnecter</a>`:''}</div>`}
+  side.innerHTML+=`<div style="margin:14px 8px 0;font-size:11px;color:#6f7ca8">Version ${APP_VERSION}</div>`;
+  document.getElementById('title').textContent=PAGES.find(p=>p[0]===page)[2];
+  document.getElementById('topact').innerHTML='';
+  if(CLOUD&&!READY){document.getElementById('view').innerHTML='<div class="card empty">Chargement des données…</div>';return}
+  ({dashboard:vDash,eleves:vEleves,classes:vClasses,profs:vProfs,paiements:vPay,compta:vCompta,banque:vBanque,notes:vNotes,bulletins:vBull,presences:vPres,params:vParams,users:vUsers})[page]();
+  applyRole();
+}
+
+/* ============ TABLEAU DE BORD ============ */
+function vDash(){
+  const act=active();
+  const rec=sum(S.payments.map(p=>p.amount)),dep=sum(S.expenses.map(e=>e.amount)),bk=sum(S.deposits.map(d=>d.amount));
+  const due_=sum(act.map(s=>Math.max(0,balance(s))));
+  const months={};
+  S.payments.forEach(p=>{const m=p.date.slice(0,7);months[m]=(months[m]||0)+p.amount});
+  const keys=Object.keys(months).sort().slice(-6),max=Math.max(1,...keys.map(k=>months[k]));
+  const debt=act.filter(s=>balance(s)>0).sort((a,b)=>balance(b)-balance(a)).slice(0,6);
+  const rate=sum(act.map(due))?Math.round(100*sum(act.map(s=>Math.min(paidTuition(s.id),due(s))))/sum(act.map(due))):0;
+  document.getElementById('view').innerHTML=`
+  <div class="grid kpis">
+   <div class="card kpi"><span>Élèves inscrits</span><b>${act.length}</b></div>
+   <div class="card kpi"><span>Professeurs</span><b>${S.teachers.length}</b></div>
+   <div class="card kpi"><span>Total encaissé</span><b style="color:var(--ok)">${fmt(rec)}</b></div>
+   <div class="card kpi"><span>Dépenses</span><b style="color:var(--bad)">${fmt(dep)}</b></div>
+   <div class="card kpi"><span>Solde de caisse</span><b>${fmt(rec-dep-bk)}</b></div>
+   <div class="card kpi"><span>Déposé en banque</span><b style="color:var(--pri)">${fmt(bk)}</b></div>
+   <div class="card kpi"><span>Impayés de scolarité</span><b style="color:var(--warn)">${fmt(due_)}</b><span>Recouvrement : ${rate}%</span></div>
+  </div>
+  <div class="grid two">
+   <div class="card"><b>Encaissements par mois</b>${keys.length?`<div class="chart">${keys.map(k=>`<div><small>${fmt(months[k]).replace(' '+S.settings.currency,'')}</small><i style="height:${Math.max(3,months[k]/max*120)}px"></i>${k.slice(5)}/${k.slice(2,4)}</div>`).join('')}</div>`:'<div class="empty">Aucun paiement enregistré</div>'}</div>
+   <div class="card"><b>Plus gros impayés</b>${debt.length?`<table>${debt.map(s=>`<tr><td>${esc(fullname(s))}<br><small style="color:var(--muted)">${esc(cls(s.classId)?.name||'')}</small></td><td class="r" style="text-align:right;color:var(--bad)"><b>${fmt(balance(s))}</b></td></tr>`).join('')}</table>`:'<div class="empty">Aucun impayé 🎉</div>'}</div>
+  </div>
+  ${!S.classes.length?`<div class="card" style="margin-top:14px"><b>Pour démarrer :</b> créez vos classes, ajoutez les élèves et les professeurs — ou chargez des données de démonstration dans <a href="#" onclick="go('params');return false">Paramètres</a>.</div>`:''}`;
+}
+
+/* ============ ÉLÈVES ============ */
+function vEleves(){
+  document.getElementById('topact').innerHTML='<button class="btn" onclick="formStudent()">+ Nouvel élève</button>';
+  document.getElementById('view').innerHTML=`<div class="card"><div class="bar"><input id="q" placeholder="Rechercher (nom, matricule, parent)…" oninput="fillStudents()"><select id="fl" onchange="fillStudents()"><option value="">Tous les niveaux</option>${LEVELS.map(l=>`<option>${l}</option>`).join('')}</select><select id="fc" onchange="fillStudents()"><option value="">Toutes les classes</option>${classOptions(myClasses())}</select><select id="fs" onchange="fillStudents()"><option value="">Tous statuts</option><option value="d">Avec impayés</option><option value="s">Soldés</option></select><button class="btn ghost" onclick="printBadges()">🪪 Imprimer les badges (liste affichée)</button><button class="btn ghost" onclick="exportStudents()">Export CSV</button></div><div class="tw" id="tbl"></div></div>`;
+  fillStudents();
+}
+function studentRow(s){
+  const d=due(s),p=paidTuition(s.id),b=d-p,pc=d?Math.min(100,Math.round(p/d*100)):0;
+  return `<tr><td>${esc(s.matricule||'—')}</td><td>${avatar(s)} <b>${esc(fullname(s))}</b>${s.status==='Sorti'?' <span class="tag bad">Sorti</span>':''}</td><td>${esc(cls(s.classId)?.name||'—')}</td><td>${esc(s.parent||'')}<br><small style="color:var(--muted)">${esc(s.tel||'')}</small></td><td><div class="prog"><i style="width:${pc}%"></i></div><small>${pc}%</small></td><td>${b>0?`<span class="tag warn">${fmt(b)}</span>`:'<span class="tag ok">Soldé</span>'}</td><td><div class="act"><button class="btn sm ghost" onclick="viewStudent('${s.id}')">Fiche</button><button class="btn sm ghost" onclick="printBadges([stu('${s.id}')])">🪪 Badge</button><button class="btn sm ghost" onclick="formStudent('${s.id}')">Modifier</button><button class="btn sm red" onclick="delStudent('${s.id}')">Suppr.</button></div></td></tr>`;
+}
+function fillStudents(){setTimeout(applyRole,0);
+  const q=(document.getElementById('q').value||'').toLowerCase(),fc=document.getElementById('fc').value,fs=document.getElementById('fs').value,fl=document.getElementById('fl').value;
+  const grpIdx=s=>{const i=LEVELS.indexOf(levelOf(cls(s.classId)));return i<0?LEVELS.length:i};
+  const list=S.students.filter(s=>mineStudent(s)&&(!fl||levelOf(cls(s.classId))===fl)&&(!fc||s.classId===fc)&&(!q||(s.nom+' '+s.prenom+' '+(s.matricule||'')+' '+(s.parent||'')).toLowerCase().includes(q))&&(!fs||(fs==='d'?balance(s)>0:balance(s)<=0)))
+    .sort((a,b)=>grpIdx(a)-grpIdx(b)||byName(cls(a.classId)||{},cls(b.classId)||{})||fullname(a).localeCompare(fullname(b),'fr'));
+  window._list=list;
+  const head='<tr><th>Matricule</th><th>Élève</th><th>Classe</th><th>Parent / Tél</th><th>Scolarité</th><th>Reste</th><th></th></tr>';
+  document.getElementById('tbl').innerHTML=list.length?LEVELS.concat(['Autres']).map(l=>{
+    const g=list.filter(s=>levelOf(cls(s.classId))===l);if(!g.length)return '';
+    const names=Array.from(new Set(g.map(s=>cls(s.classId)?.name).filter(Boolean)));
+    return `<h3 class="lvl">${LEVEL_ICON[l]} ${l} <small>· ${g.length} élève(s)${names.length?' · '+esc(names.join(', ')):''}</small></h3><table>${head}${g.map(studentRow).join('')}</table>`}).join(''):'<div class="empty">Aucun élève trouvé</div>';
+}
+function formStudent(id){
+  if(!S.classes.length){alert("Créez d'abord au moins une classe.");go('classes');return}
+  const s=id?stu(id):{};
+  openForm(id?"Modifier l'élève":"Nouvel élève",[
+    {k:'photo',l:'Photo',t:'photo'},...matFields(s,'N° matricule de l\'élève'),{k:'prenom',l:'Prénom',r:1},{k:'nom',l:'Nom',r:1},
+    {k:'sexe',l:'Sexe',t:'select',o:[{v:'M',l:'Masculin'},{v:'F',l:'Féminin'}]},
+    {k:'naissance',l:'Date de naissance',t:'date'},
+    {k:'classId',l:'Classe',t:'select',o:S.classes.map(c=>({v:c.id,l:c.name}))},
+    {k:'parent',l:'Nom du parent / tuteur'},{k:'tel',l:'Téléphone du parent'},
+    {k:'remise',l:'Remise accordée ('+S.settings.currency+')',t:'number',d:0},
+    {k:'status',l:'Statut',t:'select',o:[{v:'Inscrit',l:'Inscrit'},{v:'Sorti',l:'Sorti / Abandon'}]}
+  ],matVals(s),d=>{
+    if(matResolve(d,S.students,id,s,'E')===false)return false;
+    d.remise=+d.remise||0;
+    if(id)Object.assign(s,d);else S.students.push({id:uid(),...d});
+  });
+  matSetup();
+}
+function delStudent(id){if(confirm("Supprimer cet élève ? Ses paiements et notes seront aussi supprimés."))
+  {S.students=S.students.filter(s=>s.id!==id);S.payments=S.payments.filter(p=>p.studentId!==id);Object.keys(S.grades).forEach(k=>{if(k.startsWith(id+'|'))delete S.grades[k]});save();render()}}
+function viewStudent(id){
+  const s=stu(id),pays=S.payments.filter(p=>p.studentId===id).sort((a,b)=>b.date.localeCompare(a.date));
+  modal(`<div style="display:flex;gap:8px;align-items:center;border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:10px">${logoImg(30)}<b>${esc(S.settings.name)}</b></div><div style="display:flex;gap:12px;align-items:center;margin-bottom:8px">${avatar(s,64)}<h3 style="margin:0">${esc(fullname(s))}</h3></div><p style="color:var(--muted);margin-top:-6px">Matricule : ${esc(s.matricule||'—')} · ${esc(cls(s.classId)?.name||'')} · Né(e) le ${fdate(s.naissance)||'—'}<br>Parent : ${esc(s.parent||'—')} ${esc(s.tel||'')}</p>
+  <div class="grid kpis" style="grid-template-columns:repeat(3,1fr)"><div class="card kpi"><span>Scolarité due</span><b style="font-size:15px">${fmt(due(s))}</b></div><div class="card kpi"><span>Payé</span><b style="font-size:15px;color:var(--ok)">${fmt(paidTuition(id))}</b></div><div class="card kpi"><span>Reste</span><b style="font-size:15px;color:var(--bad)">${fmt(Math.max(0,balance(s)))}</b></div></div>
+  <div class="tw"><table><tr><th>Date</th><th>Type</th><th>Montant</th><th>Mode</th><th></th></tr>${pays.map(p=>`<tr><td>${fdate(p.date)}</td><td>${esc(p.type)}</td><td>${fmt(p.amount)}</td><td>${esc(p.mode)}</td><td><button class="btn sm ghost" onclick="receipt('${p.id}')">Reçu</button></td></tr>`).join('')||'<tr><td colspan="5" class="empty">Aucun paiement</td></tr>'}</table></div>
+  <div class="row"><button class="btn ghost" onclick="closeM()">Fermer</button><button class="btn ghost" onclick="printBadges([stu('${id}')])">🪪 Badge</button><button class="btn" onclick="closeM();formPay('${id}')">+ Paiement</button></div>`,true);
+}
+function exportStudents(){
+  const rows=[['Matricule','Nom','Prénom','Sexe','Classe','Parent','Téléphone','Dû','Payé','Reste']].concat(S.students.map(s=>[s.matricule,s.nom,s.prenom,s.sexe,cls(s.classId)?.name||'',s.parent||'',s.tel||'',due(s),paidTuition(s.id),balance(s)]));
+  downloadFile('eleves.csv','\ufeff'+rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(';')).join('\n'),'text/csv');
+}
+
+/* ============ CLASSES ============ */
+function vClasses(){
+  document.getElementById('topact').innerHTML='<button class="btn" onclick="formClass()">+ Nouvelle classe</button>';
+  document.getElementById('view').innerHTML=`<div class="card tw">${S.classes.length?`<table><tr><th>Classe</th><th>Niveau</th><th>Titulaire</th><th>Effectif</th><th>Scolarité annuelle</th><th></th></tr>${S.classes.map(c=>`<tr><td><b>${esc(c.name)}</b></td><td>${esc(c.level||'')}</td><td>${esc(fullname(tch(c.teacherId)))}</td><td>${S.students.filter(s=>s.classId===c.id&&s.status!=='Sorti').length}</td><td>${fmt(c.fee)}</td><td><div class="act"><button class="btn sm ghost" onclick="formClass('${c.id}')">Modifier</button><button class="btn sm red" onclick="delClass('${c.id}')">Suppr.</button></div></td></tr>`).join('')}</table>`:'<div class="empty">Aucune classe. Cliquez sur « Nouvelle classe ».</div>'}</div>`;
+}
+function formClass(id){
+  const c=id?cls(id):{};
+  openForm(id?'Modifier la classe':'Nouvelle classe',[
+    {k:'name',l:'Nom de la classe (ex : 6ème A)',r:1},
+    {k:'level',l:'Niveau (sert à regrouper les élèves : Primaire, Collège, Lycée…)',t:'select',o:LEVELS.map(x=>({v:x,l:x}))},
+    {k:'fee',l:'Scolarité annuelle ('+S.settings.currency+')',t:'number',r:1},
+    {k:'teacherId',l:'Professeur titulaire',t:'select',o:[{v:'',l:'— Aucun —'}].concat(S.teachers.map(t=>({v:t.id,l:fullname(t)})))}
+  ],c,d=>{d.fee=+d.fee||0;if(id)Object.assign(c,d);else S.classes.push({id:uid(),...d})});
+}
+function delClass(id){
+  if(S.students.some(s=>s.classId===id)){alert("Cette classe contient des élèves. Déplacez-les d'abord.");return}
+  if(confirm('Supprimer cette classe ?')){S.classes=S.classes.filter(c=>c.id!==id);save();render()}
+}
+
+/* ============ PROFESSEURS ============ */
+function vProfs(){
+  document.getElementById('topact').innerHTML='<button class="btn ghost" onclick="printCards()">🪪 Imprimer toutes les cartes</button> <button class="btn" onclick="formTeacher()">+ Nouveau professeur</button>';
+  document.getElementById('view').innerHTML=`<div class="card tw">${S.teachers.length?`<table><tr><th>Nom</th><th>Matière</th><th>Téléphone</th><th>Salaire mensuel</th><th>Dernier paiement</th><th></th></tr>${S.teachers.map(t=>{
+    const last=S.expenses.filter(e=>e.teacherId===t.id).sort((a,b)=>b.date.localeCompare(a.date))[0];
+    return `<tr><td>${avatar(t)} <b>${esc(fullname(t))}</b><br><small style="color:var(--muted)">${esc(t.matricule||'')}</small></td><td>${esc(t.matiere||'')}</td><td>${esc(t.tel||'')}</td><td>${fmt(t.salaire)}</td><td>${last?esc(last.label)+'<br><small style="color:var(--muted)">'+fdate(last.date)+'</small>':'—'}</td><td><div class="act"><button class="btn sm" onclick="paySalary('${t.id}')">Payer salaire</button><button class="btn sm ghost" onclick="printCards([tch('${t.id}')])">🪪 Carte</button><button class="btn sm ghost" onclick="formTeacher('${t.id}')">Modifier</button><button class="btn sm red" onclick="delTeacher('${t.id}')">Suppr.</button></div></td></tr>`}).join('')}</table>`:'<div class="empty">Aucun professeur enregistré.</div>'}</div>`;
+}
+function formTeacher(id){
+  const t=id?tch(id):{};
+  openForm(id?'Modifier le professeur':'Nouveau professeur',[
+    {k:'photo',l:'Photo',t:'photo'},...matFields(t,'N° matricule du professeur'),{k:'prenom',l:'Prénom',r:1},{k:'nom',l:'Nom',r:1},
+    {k:'sexe',l:'Sexe',t:'select',o:[{v:'M',l:'Masculin'},{v:'F',l:'Féminin'}]},{k:'naissance',l:'Date de naissance',t:'date'},
+    {k:'matiere',l:'Matière enseignée'},{k:'tel',l:'Téléphone'},{k:'email',l:'E-mail',t:'email'},{k:'adresse',l:'Adresse'},
+    {k:'diplome',l:'Diplôme / qualification'},{k:'embauche',l:"Date d'embauche",t:'date'},
+    {k:'salaire',l:'Salaire mensuel ('+S.settings.currency+')',t:'number',d:0}
+  ],matVals(t),d=>{if(matResolve(d,S.teachers,id,t,'P')===false)return false;d.salaire=+d.salaire||0;if(id)Object.assign(t,d);else S.teachers.push({id:uid(),...d})});
+  matSetup();
+}
+function delTeacher(id){if(confirm('Supprimer ce professeur ?')){S.teachers=S.teachers.filter(t=>t.id!==id);S.classes.forEach(c=>{if(c.teacherId===id)c.teacherId=''});save();render()}}
+function paySalary(id){
+  const t=tch(id),now=new Date(),mois=now.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
+  openForm('Payer le salaire – '+fullname(t),[
+    {k:'mois',l:'Période',d:mois},{k:'amount',l:'Montant ('+S.settings.currency+')',t:'number',d:t.salaire,r:1},{k:'date',l:'Date',t:'date',d:today()}
+  ],{},d=>{S.expenses.push({id:uid(),date:d.date,category:'Salaire',label:'Salaire '+fullname(t)+' – '+d.mois,amount:+d.amount,teacherId:id})});
+}
+
+/* ============ PAIEMENTS ============ */
+function vPay(){
+  document.getElementById('topact').innerHTML='<button class="btn" onclick="formPay()">+ Encaisser un paiement</button>';
+  document.getElementById('view').innerHTML=`<div class="card"><div class="bar"><input id="pq" placeholder="Rechercher élève ou reçu…" oninput="fillPay()"><select id="pt" onchange="fillPay()"><option value="">Tous types</option>${PAY_TYPES.map(t=>`<option>${t}</option>`).join('')}</select><input type="month" id="pm" onchange="fillPay()"></div><div class="tw" id="ptbl"></div></div>`;
+  fillPay();
+}
+function fillPay(){
+  const q=document.getElementById('pq').value.toLowerCase(),t=document.getElementById('pt').value,m=document.getElementById('pm').value;
+  const list=S.payments.filter(p=>(!t||p.type===t)&&(!m||p.date.startsWith(m))&&(!q||(fullname(stu(p.studentId))+' '+p.ref).toLowerCase().includes(q))).sort((a,b)=>b.date.localeCompare(a.date)||b.ref.localeCompare(a.ref));
+  document.getElementById('ptbl').innerHTML=list.length?`<table><tr><th>Reçu</th><th>Date</th><th>Élève</th><th>Type</th><th>Mode</th><th>Montant</th><th></th></tr>${list.map(p=>`<tr><td>${esc(p.ref)}</td><td>${fdate(p.date)}</td><td>${esc(fullname(stu(p.studentId)))}</td><td>${esc(p.type)}</td><td>${esc(p.mode)}</td><td><b>${fmt(p.amount)}</b></td><td><div class="act"><button class="btn sm ghost" onclick="receipt('${p.id}')">Reçu</button><button class="btn sm red" onclick="delPay('${p.id}')">Suppr.</button></div></td></tr>`).join('')}</table><p style="text-align:right"><b>Total affiché : ${fmt(sum(list.map(p=>p.amount)))}</b></p>`:'<div class="empty">Aucun paiement</div>';
+}
+function formPay(sid){
+  if(!S.students.length){alert("Ajoutez d'abord des élèves.");go('eleves');return}
+  openForm('Encaisser un paiement',[
+    {k:'studentId',l:'Élève',t:'select',o:active().map(s=>({v:s.id,l:fullname(s)+' – '+(cls(s.classId)?.name||'')+' (reste '+fmt(Math.max(0,balance(s)))+')'}))},
+    {k:'type',l:'Type',t:'select',o:PAY_TYPES.map(x=>({v:x,l:x}))},
+    {k:'amount',l:'Montant ('+S.settings.currency+')',t:'number',r:1},
+    {k:'mode',l:'Mode de paiement',t:'select',o:MODES.map(x=>({v:x,l:x}))},
+    {k:'date',l:'Date',t:'date',d:today()}
+  ],{studentId:sid},d=>{
+    S.counter++;
+    const p={id:uid(),ref:'R-'+d.date.slice(0,4)+'-'+String(S.counter).padStart(4,'0'),studentId:d.studentId,type:d.type,amount:+d.amount,mode:d.mode,date:d.date};
+    S.payments.push(p);setTimeout(()=>{if(confirm('Paiement enregistré. Imprimer le reçu ?'))receipt(p.id)},100);
+  });
+}
+function delPay(id){if(confirm('Supprimer ce paiement ?')){S.payments=S.payments.filter(p=>p.id!==id);save();render()}}
+function receipt(id){
+  const p=S.payments.find(x=>x.id===id),s=stu(p.studentId);
+  printHTML('Reçu '+p.ref,`<div style="position:relative;min-height:520px">${watermark()}${schoolHeader('REÇU DE PAIEMENT N° '+p.ref)}
+  <table><tr><th>Élève</th><td>${esc(fullname(s))}${s.matricule?' ('+esc(s.matricule)+')':''}</td></tr><tr><th>Classe</th><td>${esc(cls(s.classId)?.name||'')}</td></tr><tr><th>Date</th><td>${fdate(p.date)}</td></tr><tr><th>Objet</th><td>${esc(p.type)}</td></tr><tr><th>Mode</th><td>${esc(p.mode)}</td></tr><tr><th>Montant reçu</th><td><b>${fmt(p.amount)}</b></td></tr><tr><th>Reste scolarité</th><td>${fmt(Math.max(0,balance(s)))}</td></tr></table>
+  <div class="sig"><div>Le parent</div><div>La comptabilité (cachet &amp; signature)</div></div></div>`);
+}
+
+/* ============ COMPTABILITÉ ============ */
+function vCompta(){
+  document.getElementById('topact').innerHTML='<button class="btn" onclick="formExp()">+ Dépense</button>';
+  document.getElementById('view').innerHTML=`<div class="bar"><input type="month" id="cm" onchange="fillCompta()"><button class="btn ghost" onclick="document.getElementById('cm').value='';fillCompta()">Toute l'année</button><button class="btn ghost" onclick="exportCompta()">Export CSV</button></div><div id="cbody"></div>`;
+  fillCompta();
+}
+function ledger(m){
+  const r=S.payments.filter(p=>!m||p.date.startsWith(m)).map(p=>({date:p.date,kind:'in',cat:p.type,label:fullname(stu(p.studentId))+' – '+p.ref,amount:p.amount}));
+  const d=S.expenses.filter(e=>!m||e.date.startsWith(m)).map(e=>({id:e.id,date:e.date,kind:'out',cat:e.category,label:e.label,amount:e.amount}));
+  const b=S.deposits.filter(x=>!m||x.date.startsWith(m)).map(x=>({date:x.date,kind:'bank',cat:'Dépôt en banque',label:x.bank+(x.ref?' – bordereau '+x.ref:''),amount:x.amount}));
+  return r.concat(d,b).sort((a,b)=>b.date.localeCompare(a.date));
+}
+function fillCompta(){
+  const m=document.getElementById('cm').value,L=ledger(m);
+  const rin=sum(L.filter(x=>x.kind==='in').map(x=>x.amount)),rout=sum(L.filter(x=>x.kind==='out').map(x=>x.amount)),rbk=sum(L.filter(x=>x.kind==='bank').map(x=>x.amount));
+  const byCat={};L.filter(x=>x.kind==='out').forEach(x=>byCat[x.cat]=(byCat[x.cat]||0)+x.amount);
+  document.getElementById('cbody').innerHTML=`<div class="grid kpis"><div class="card kpi"><span>Recettes</span><b style="color:var(--ok)">${fmt(rin)}</b></div><div class="card kpi"><span>Dépenses</span><b style="color:var(--bad)">${fmt(rout)}</b></div><div class="card kpi"><span>Résultat</span><b>${fmt(rin-rout)}</b></div><div class="card kpi"><span>Déposé en banque</span><b style="color:var(--pri)">${fmt(rbk)}</b></div><div class="card kpi"><span>Solde de caisse</span><b>${fmt(rin-rout-rbk)}</b></div></div>
+  <div class="grid two"><div class="card tw"><b>Journal</b>${L.length?`<table><tr><th>Date</th><th>Catégorie</th><th>Libellé</th><th>Entrée</th><th>Sortie</th><th></th></tr>${L.map(x=>`<tr><td>${fdate(x.date)}</td><td>${esc(x.cat)}</td><td>${esc(x.label)}</td><td style="color:var(--ok)">${x.kind==='in'?fmt(x.amount):''}</td><td style="color:${x.kind==='bank'?'var(--pri)':'var(--bad)'}">${x.kind!=='in'?fmt(x.amount):''}</td><td>${x.id?`<button class="btn sm red" onclick="delExp('${x.id}')">×</button>`:''}</td></tr>`).join('')}</table>`:'<div class="empty">Aucune écriture</div>'}</div>
+  <div class="card"><b>Dépenses par catégorie</b><table>${Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${esc(k)}</td><td style="text-align:right">${fmt(v)}</td></tr>`).join('')||'<tr><td class="empty">—</td></tr>'}</table></div></div>`;
+}
+function formExp(){
+  openForm('Nouvelle dépense',[
+    {k:'category',l:'Catégorie',t:'select',o:EXP_CATS.map(x=>({v:x,l:x}))},{k:'label',l:'Libellé',r:1},
+    {k:'amount',l:'Montant ('+S.settings.currency+')',t:'number',r:1},{k:'date',l:'Date',t:'date',d:today()}
+  ],{},d=>{S.expenses.push({id:uid(),date:d.date,category:d.category,label:d.label,amount:+d.amount})});
+}
+function delExp(id){if(confirm('Supprimer cette dépense ?')){S.expenses=S.expenses.filter(e=>e.id!==id);save();render()}}
+function exportCompta(){
+  const m=document.getElementById('cm').value,rows=[['Date','Type','Catégorie','Libellé','Montant']].concat(ledger(m).map(x=>[x.date,x.kind==='in'?'Recette':x.kind==='bank'?'Dépôt banque':'Dépense',x.cat,x.label,x.amount]));
+  downloadFile('comptabilite.csv','\ufeff'+rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(';')).join('\n'),'text/csv');
+}
+
+/* ============ BANQUE (dépôts d'argent) ============ */
+const BANKS=['BICIGUI','Ecobank','Société Générale Guinée','Vista Bank','Afriland First Bank','UBA','Orabank','BNG','Banque Islamique de Guinée'];
+function cashBalance(){return sum(S.payments.map(p=>p.amount))-sum(S.expenses.map(e=>e.amount))-sum(S.deposits.map(d=>d.amount))}
+function vBanque(){
+  document.getElementById('topact').innerHTML='<button class="btn" onclick="formDeposit()">+ Dépôt en banque</button>';
+  const L=S.deposits.slice().sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)));
+  const mo=today().slice(0,7),tot=sum(L.map(d=>d.amount)),mm=sum(L.filter(d=>d.date.startsWith(mo)).map(d=>d.amount));
+  const byBank={};L.forEach(d=>byBank[d.bank]=(byBank[d.bank]||0)+d.amount);
+  document.getElementById('view').innerHTML=`<div class="grid kpis"><div class="card kpi"><span>Solde de caisse (à déposer)</span><b>${fmt(cashBalance())}</b></div><div class="card kpi"><span>Total déposé en banque</span><b style="color:var(--pri)">${fmt(tot)}</b></div><div class="card kpi"><span>Déposé ce mois</span><b>${fmt(mm)}</b></div></div>
+  <div class="grid two"><div class="card tw"><b>Dépôts</b>${L.length?`<table><tr><th>Date</th><th>Banque</th><th>N° bordereau</th><th>Montant</th><th>Déposé par</th><th></th></tr>${L.map(d=>`<tr><td>${fdate(d.date)}</td><td>${esc(d.bank)}${d.note?'<br><small style="color:var(--muted)">'+esc(d.note)+'</small>':''}</td><td>${esc(d.ref||'—')}</td><td><b>${fmt(d.amount)}</b></td><td>${esc(d.by||'')}</td><td><div class="act"><button class="btn sm ghost" onclick="printDeposit('${d.id}')">Bordereau</button><button class="btn sm red" onclick="delDeposit('${d.id}')">×</button></div></td></tr>`).join('')}</table>`:'<div class="empty">Aucun dépôt enregistré</div>'}</div>
+  <div class="card"><b>Total par banque</b><table>${Object.entries(byBank).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${esc(k)}</td><td style="text-align:right">${fmt(v)}</td></tr>`).join('')||'<tr><td class="empty">—</td></tr>'}</table></div></div>`;
+}
+function formDeposit(){
+  const banks=Array.from(new Set(S.deposits.map(d=>d.bank).concat(BANKS)));
+  modal(`<h3>Dépôt d'argent en banque</h3><p style="color:var(--muted);margin-top:-6px">Solde de caisse actuel : <b>${fmt(cashBalance())}</b></p><form id="fd"><label>Banque<input name="bank" list="banks" required placeholder="Choisir ou saisir une banque"><datalist id="banks">${banks.map(b=>`<option value="${esc(b)}">`).join('')}</datalist></label><label>Montant déposé (${esc(S.settings.currency)})<input name="amount" type="number" min="1" step="any" required></label><label>N° du bordereau de versement<input name="ref"></label><label>Date<input name="date" type="date" value="${today()}" required></label><label>Note (facultatif)<input name="note"></label><div class="row"><button type="button" class="btn ghost" onclick="closeM()">Annuler</button><button class="btn">Enregistrer</button></div></form>`);
+  document.getElementById('fd').onsubmit=e=>{e.preventDefault();const f=new FormData(e.target),a=+f.get('amount');
+    if(a>cashBalance()&&!confirm("Ce montant dépasse le solde de caisse ("+fmt(cashBalance())+"). Enregistrer quand même ?"))return;
+    S.deposits.push({id:uid(),bank:f.get('bank').trim(),amount:a,ref:f.get('ref').trim(),date:f.get('date'),note:f.get('note').trim(),by:(typeof ME!=='undefined'&&ME&&ME.name)||''});
+    closeM();save();render()};
+}
+function delDeposit(id){if(confirm('Supprimer ce dépôt ?')){S.deposits=S.deposits.filter(d=>d.id!==id);save();render()}}
+function printDeposit(id){
+  const d=S.deposits.find(x=>x.id===id);
+  printHTML('Bordereau de dépôt',`<div style="position:relative;min-height:420px">${watermark()}${schoolHeader('BORDEREAU DE DÉPÔT EN BANQUE')}<table><tr><th>Date</th><td>${fdate(d.date)}</td></tr><tr><th>Banque</th><td>${esc(d.bank)}</td></tr><tr><th>N° bordereau de la banque</th><td>${esc(d.ref||'—')}</td></tr><tr><th>Montant déposé</th><td><b>${fmt(d.amount)}</b></td></tr><tr><th>Déposé par</th><td>${esc(d.by||'')}</td></tr>${d.note?`<tr><th>Note</th><td>${esc(d.note)}</td></tr>`:''}</table><div class="sig"><div>Le caissier</div><div>La direction (cachet &amp; signature)</div></div></div>`);
+}
+
+/* ============ NOTES ============ */
+const LEVELS=['Maternelle','Primaire','Collège','Lycée'];
+const LEVEL_ICON={Maternelle:'🧸',Primaire:'🎒',Collège:'📘',Lycée:'🎓',Autres:'📁'};
+const levelOf=c=>c&&LEVELS.includes(c.level)?c.level:'Autres';
+const byName=(a,b)=>String(a.name||'').localeCompare(String(b.name||''),'fr',{numeric:true});
+const myClasses=()=>role()==='professeur'?S.classes.filter(c=>(ME.classIds||[]).includes(c.id)):S.classes;
+const mineStudent=s=>role()!=='professeur'||(ME.classIds||[]).includes(s.classId);
+function classOptions(list){return LEVELS.concat(['Autres']).map(l=>{const cs=list.filter(c=>levelOf(c)===l).sort(byName);return cs.length?`<optgroup label="${l}">${cs.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</optgroup>`:''}).join('')}
+function classSelect(id,fn){return `<select id="${id}" onchange="${fn}">${classOptions(myClasses())}</select>`}
+function noClass(){document.getElementById('view').innerHTML=role()==='professeur'?'<div class="card empty">Aucune classe ne vous est attribuée.<br>Demandez à la direction de vous affecter vos classes.</div>':'<div class="card empty">Créez d\'abord une classe.</div>'}
+function termSelect(id,fn){return `<select id="${id}" onchange="${fn}">${TERMS.map(t=>`<option>${t}</option>`).join('')}</select>`}
+function vNotes(){
+  if(!myClasses().length){noClass();return}
+  document.getElementById('view').innerHTML=`<div class="card"><div class="bar">${classSelect('nc','fillNotes()')}${termSelect('nt','fillNotes()')}<select id="ns" onchange="fillNotes()">${S.settings.subjects.map(s=>`<option>${esc(s.n)}</option>`).join('')}</select></div><div class="tw" id="ntbl"></div></div>`;
+  fillNotes();
+}
+function fillNotes(){
+  const c=document.getElementById('nc').value,t=document.getElementById('nt').value,sj=document.getElementById('ns').value;
+  const list=S.students.filter(s=>s.classId===c&&s.status!=='Sorti');
+  document.getElementById('ntbl').innerHTML=list.length?`<table><tr><th>Élève</th><th style="width:140px">Note /20</th></tr>${list.map(s=>`<tr><td>${esc(fullname(s))}</td><td><input type="number" min="0" max="20" step="0.25" value="${S.grades[s.id+'|'+t+'|'+sj]??''}" onchange="setGrade('${s.id}','${t}','${sj.replace(/'/g,"\\'")}',this.value)"></td></tr>`).join('')}</table><p style="color:var(--muted)">Les notes sont enregistrées automatiquement.</p>`:'<div class="empty">Aucun élève dans cette classe</div>';
+}
+function setGrade(sid,t,sj,v){const k=sid+'|'+t+'|'+sj;if(v===''){delete S.grades[k]}else{S.grades[k]=Math.max(0,Math.min(20,+v))}save()}
+
+/* ============ BULLETINS ============ */
+const f2=n=>(n===null||n===undefined)?'—':(Math.round(n*100)/100).toFixed(2);
+const r100=a=>Math.round(a*100);
+function calcStudent(sid,term){
+  let tot=0,coef=0;const rows=S.settings.subjects.map(sj=>{const n=S.grades[sid+'|'+term+'|'+sj.n];if(n!==undefined){tot+=n*sj.c;coef+=sj.c}return{sj,n}});
+  return{rows,avg:coef?tot/coef:null,tot,coef};
+}
+function ranking(classId,term){
+  const l=S.students.filter(s=>s.classId===classId&&s.status!=='Sorti').map(s=>({s,avg:calcStudent(s.id,term).avg}));
+  const ranked=l.filter(x=>x.avg!==null).sort((a,b)=>b.avg-a.avg||fullname(a.s).localeCompare(fullname(b.s),'fr'));
+  ranked.forEach(x=>{const k=r100(x.avg);x.rank=ranked.findIndex(y=>r100(y.avg)===k)+1;x.ex=ranked.filter(y=>r100(y.avg)===k).length>1});
+  return{all:l,n:ranked.length,ranked};
+}
+const rk=x=>x&&x.rank?(x.rank===1?'1er':x.rank+'e')+(x.ex?' ex':''):'—';
+const appr=a=>a>=16?'Excellent':a>=14?'Très bien':a>=12?'Bien':a>=10?'Passable':'Insuffisant';
+function classStats(classId,term){
+  const ids=S.students.filter(s=>s.classId===classId&&s.status!=='Sorti').map(s=>s.id);
+  return S.settings.subjects.map(sj=>{
+    const notes=ids.map(i=>S.grades[i+'|'+term+'|'+sj.n]).filter(v=>v!==undefined);
+    return{notes,avg:notes.length?sum(notes)/notes.length:null,min:notes.length?Math.min(...notes):null,max:notes.length?Math.max(...notes):null};
+  });
+}
+const sortedByRank=R=>R.all.slice().sort((a,b)=>(a.rank||9999)-(b.rank||9999)||fullname(a.s).localeCompare(fullname(b.s),'fr'));
+function curBull(){return{c:document.getElementById('bc').value,t:document.getElementById('bt').value}}
+function vBull(){
+  if(!myClasses().length){noClass();return}
+  document.getElementById('view').innerHTML=`<div class="card"><div class="bar">${classSelect('bc','fillBull()')}${termSelect('bt','fillBull()')}<select id="bv" onchange="fillBull()"><option value="d">Affichage : notes détaillées</option><option value="c">Affichage : classement (rang, matricule, élève, moyenne, appréciation)</option></select><button class="btn" onclick="showAllBull()">👁 Voir tous les bulletins</button><button class="btn ghost" onclick="printAllBull()">🖨️ Imprimer tous les bulletins</button><button class="btn ghost" onclick="printClassement()">🖨️ Imprimer le classement</button><button class="btn ghost" onclick="printRecap()">🖨️ Imprimer le tableau des notes et rangs</button></div><div class="tw" id="btbl"></div></div>`;
+  fillBull();
+}
+/* tableau récapitulatif de la classe : notes par matière, moyenne, rang */
+function recapHTML(classId,t,withBtn){
+  const R=ranking(classId,t),subs=S.settings.subjects,st=classStats(classId,t);
+  if(!R.all.length)return '<div class="empty">Aucun élève dans cette classe</div>';
+  const avgs=R.ranked.map(x=>x.avg),cavg=avgs.length?sum(avgs)/avgs.length:null;
+  const head=`<tr><th>Rang</th><th>Matricule</th><th>Élève</th>${subs.map(x=>`<th style="text-align:center">${esc(x.n)}<br><small style="font-weight:400">coef ${x.c}</small></th>`).join('')}<th style="text-align:center">Moyenne /20</th><th>Appréciation</th>${withBtn?'<th></th>':''}</tr>`;
+  const rows=sortedByRank(R).map(x=>{const c=calcStudent(x.s.id,t);
+    return `<tr><td><b>${rk(x)}</b></td><td>${esc(x.s.matricule||'—')}</td><td>${esc(fullname(x.s))}</td>${c.rows.map(r=>`<td style="text-align:center">${r.n===undefined?'—':r.n}</td>`).join('')}<td style="text-align:center"><b>${f2(x.avg)}</b></td><td>${x.avg===null?'':appr(x.avg)}</td>${withBtn?`<td><button class="btn sm ghost" onclick="printBull('${x.s.id}','${t}')">Bulletin</button></td>`:''}</tr>`}).join('');
+  const foot=`<tr style="background:#f1f3f9"><td colspan="3"><b>Moyenne de la classe</b></td>${st.map(a=>`<td style="text-align:center"><b>${f2(a.avg)}</b></td>`).join('')}<td style="text-align:center"><b>${f2(cavg)}</b></td><td></td>${withBtn?'<td></td>':''}</tr>
+   <tr><td colspan="3"><b>Note la plus haute</b></td>${st.map(a=>`<td style="text-align:center">${a.max===null?'—':a.max}</td>`).join('')}<td style="text-align:center">${f2(avgs.length?Math.max(...avgs):null)}</td><td></td>${withBtn?'<td></td>':''}</tr>
+   <tr><td colspan="3"><b>Note la plus basse</b></td>${st.map(a=>`<td style="text-align:center">${a.min===null?'—':a.min}</td>`).join('')}<td style="text-align:center">${f2(avgs.length?Math.min(...avgs):null)}</td><td></td>${withBtn?'<td></td>':''}</tr>`;
+  return `<table>${head}${rows}${foot}</table><p style="color:var(--muted);font-size:12px">Effectif classé : ${R.n} / ${R.all.length} élève(s). « ex » = ex æquo.</p>`;
+}
+function classementHTML(classId,t){
+  const R=ranking(classId,t);
+  if(!R.all.length)return '<div class="empty">Aucun élève dans cette classe</div>';
+  const avgs=R.ranked.map(x=>x.avg),cavg=avgs.length?sum(avgs)/avgs.length:null;
+  return `<table><tr><th>Rang</th><th>Matricule</th><th>Élève</th><th style="text-align:center">Moyenne /20</th><th>Appréciation</th></tr>${sortedByRank(R).map(x=>`<tr><td><b>${rk(x)}</b></td><td>${esc(x.s.matricule||'—')}</td><td>${esc(fullname(x.s))}</td><td style="text-align:center"><b>${f2(x.avg)}</b></td><td>${x.avg===null?'—':appr(x.avg)}</td></tr>`).join('')}<tr style="background:#f1f3f9"><td colspan="3"><b>Moyenne de la classe</b></td><td style="text-align:center"><b>${f2(cavg)}</b></td><td></td></tr></table><p style="color:var(--muted);font-size:12px">Effectif classé : ${R.n} / ${R.all.length} élève(s). « ex » = ex æquo.</p>`;
+}
+function fillBull(){const {c,t}=curBull(),v=document.getElementById('bv').value;document.getElementById('btbl').innerHTML=v==='c'?classementHTML(c,t):recapHTML(c,t,true)}
+function printClassement(){
+  const {c,t}=curBull();
+  printHTML('Classement',`<div style="position:relative;min-height:500px">${watermark()}${schoolHeader('CLASSEMENT – '+t)}<p><b>Classe : ${esc(cls(c)?.name||'')}</b></p>${classementHTML(c,t)}<div class="sig"><div>Le Directeur des études</div><div>Le Directeur</div></div></div>`,'@page{size:A4;margin:12mm}table{font-size:13px}');
+}
+function bullHTML(sid,t,last){
+  const s=stu(sid),c=calcStudent(sid,t),R=ranking(s.classId,t),me=R.all.find(x=>x.s.id===sid),st=classStats(s.classId,t);
+  const avgs=R.ranked.map(x=>x.avg),cavg=avgs.length?sum(avgs)/avgs.length:null;
+  const body=c.rows.map((r,i)=>{const a=st[i],rg=r.n===undefined?'—':(1+a.notes.filter(v=>v>r.n).length)+' / '+a.notes.length;
+    return `<tr><td>${esc(r.sj.n)}</td><td>${r.sj.c}</td><td><b>${r.n===undefined?'—':r.n}</b></td><td>${r.n===undefined?'':(r.n*r.sj.c).toFixed(2)}</td><td>${f2(a.avg)}</td><td>${rg}</td></tr>`}).join('');
+  return `<div style="position:relative;min-height:600px;${last?'':'page-break-after:always;break-after:page'}">${watermark()}${schoolHeader('BULLETIN – '+t)}
+  <p><b>${esc(fullname(s))}</b> · Matricule : ${esc(s.matricule||'—')} · Classe : ${esc(cls(s.classId)?.name||'')}</p>
+  <table><tr><th>Matière</th><th>Coef.</th><th>Note /20</th><th>Points</th><th>Moy. classe</th><th>Rang matière</th></tr>${body}
+  <tr><td><b>TOTAL</b></td><td><b>${c.coef}</b></td><td></td><td><b>${c.coef?c.tot.toFixed(2):''}</b></td><td></td><td></td></tr></table>
+  <table><tr><th>Moyenne générale</th><th>Rang</th><th>Moyenne de la classe</th><th>Plus forte moyenne</th><th>Plus faible moyenne</th><th>Appréciation</th></tr>
+  <tr><td><b>${f2(c.avg)} / 20</b></td><td><b>${me&&me.rank?rk(me)+' / '+R.n:'—'}</b></td><td>${f2(cavg)}</td><td>${f2(avgs.length?Math.max(...avgs):null)}</td><td>${f2(avgs.length?Math.min(...avgs):null)}</td><td>${c.avg===null?'—':appr(c.avg)}</td></tr></table>
+  <div class="sig"><div>Le Directeur</div><div>Le Parent</div></div></div>`;
+}
+const BULL_CSS='@page{size:A4;margin:12mm}table{font-size:12px}';
+function printBull(sid,t){printHTML('Bulletin',bullHTML(sid,t,true),BULL_CSS)}
+function classBulletins(){const {c,t}=curBull();const l=S.students.filter(s=>s.classId===c&&s.status!=='Sorti').sort((a,b)=>fullname(a).localeCompare(fullname(b),'fr'));return{l,t,c}}
+function printAllBull(){const {l,t}=classBulletins();if(!l.length){alert('Aucun élève dans cette classe.');return}printHTML('Bulletins',l.map((s,i)=>bullHTML(s.id,t,i===l.length-1)).join(''),BULL_CSS)}
+function showAllBull(){
+  const {l,t,c}=classBulletins();if(!l.length){alert('Aucun élève dans cette classe.');return}
+  modal(`<h3>Bulletins – ${esc(cls(c)?.name||'')} – ${esc(t)} (${l.length})</h3><div style="max-height:68vh;overflow:auto">${l.map(s=>`<div class="bpv">${bullHTML(s.id,t,true)}</div>`).join('')}</div><div class="row"><button class="btn ghost" onclick="closeM()">Fermer</button><button class="btn" onclick="printAllBull()">🖨️ Imprimer tous les bulletins</button></div>`,true);
+}
+function printRecap(){
+  const {c,t}=curBull();
+  printHTML('Notes et rangs',`${schoolHeader('TABLEAU DES NOTES ET DES RANGS – '+t)}<p><b>Classe : ${esc(cls(c)?.name||'')}</b></p>${recapHTML(c,t,false)}<div class="sig"><div>Le Directeur des études</div><div>Le Directeur</div></div>`,'@page{size:A4 landscape;margin:10mm}body{max-width:none!important;padding:8px!important}table{font-size:11px}th,td{padding:4px 6px!important}');
+}
+
+/* ============ PRÉSENCES ============ */
+function vPres(){
+  if(!myClasses().length){noClass();return}
+  document.getElementById('view').innerHTML=`<div class="card"><div class="bar">${classSelect('ac','fillPres()')}<input type="date" id="ad" value="${today()}" onchange="fillPres()"></div><div class="tw" id="atbl"></div></div>`;
+  fillPres();
+}
+function fillPres(){
+  const c=document.getElementById('ac').value,d=document.getElementById('ad').value,key=d+'|'+c,rec=S.att[key]||{};
+  const list=S.students.filter(s=>s.classId===c&&s.status!=='Sorti');
+  const abs=sid=>Object.keys(S.att).filter(k=>k.endsWith('|'+c)&&S.att[k][sid]==='A').length;
+  document.getElementById('atbl').innerHTML=list.length?`<table><tr><th>Élève</th><th>Statut du jour</th><th>Absences cumulées</th></tr>${list.map(s=>{const v=rec[s.id]||'P';return `<tr><td>${esc(fullname(s))}</td><td><span class="seg">${[['P','p','Présent'],['R','r','Retard'],['A','a','Absent']].map(x=>`<button class="${x[1]} ${v===x[0]?'on':''}" onclick="setAtt('${key}','${s.id}','${x[0]}')">${x[2]}</button>`).join('')}</span></td><td>${abs(s.id)}</td></tr>`}).join('')}</table>`:'<div class="empty">Aucun élève</div>';
+}
+function setAtt(key,sid,v){S.att[key]=S.att[key]||{};S.att[key][sid]=v;save();fillPres()}
+
+/* ============ PARAMÈTRES ============ */
+function vParams(){
+  const s=S.settings;
+  document.getElementById('view').innerHTML=`<div class="grid two"><div class="card"><b>Établissement</b><form id="pf" style="margin-top:10px"><div class="box" style="padding:0;max-height:none;max-width:none">
+  <label>Logo / photo de l'école<div style="display:flex;gap:12px;align-items:center;margin-top:4px"><div id="pv_logo">${logoImg(72)}</div><input type="file" accept="image/*" onchange="pickPhoto(this,'logo')"><input type="hidden" id="ph_logo" name="logo" value="${esc(s.logo||'')}"></div></label><label>Nom de l'école<input name="name" value="${esc(s.name)}"></label><label>Adresse<input name="address" value="${esc(s.address)}"></label><label>Téléphone<input name="phone" value="${esc(s.phone)}"></label><label>Année scolaire<input name="year" value="${esc(s.year)}"></label><label>Devise<input name="currency" value="${esc(s.currency)}"></label></div><button class="btn">Enregistrer</button></form>
+  <hr style="border:0;border-top:1px solid var(--line);margin:18px 0"><b>Matières et coefficients</b><div id="subj"></div><button class="btn ghost sm" style="margin-top:8px" onclick="addSubject()">+ Matière</button></div>
+  <div class="card"><b>Données</b><p style="color:var(--muted)">${CLOUD?'Les données sont enregistrées <b>en ligne</b> et partagées entre tous les appareils connectés. Faites quand même des sauvegardes régulières.':'Les données sont enregistrées dans ce navigateur. Faites des sauvegardes régulières.'}</p>
+  <div class="act" style="flex-direction:column;align-items:stretch"><button class="btn ghost" onclick="clearAutoMat()">🧹 Effacer les anciens matricules automatiques</button><button class="btn ghost" onclick="backup()">⬇️ Sauvegarder (JSON)</button><label class="btn ghost" style="text-align:center">⬆️ Restaurer une sauvegarde<input type="file" accept=".json" style="display:none" onchange="restore(this.files[0])"></label>${CLOUD?'<button class="btn ghost" onclick="importLegacy()">☁️ Envoyer les données de cet appareil en ligne</button>':''}<button class="btn ghost" onclick="demo()">🧪 Charger données de démo</button><button class="btn red" onclick="resetAll()">Tout effacer</button></div></div></div>`;
+  document.getElementById('pf').onsubmit=e=>{e.preventDefault();new FormData(e.target).forEach((v,k)=>S.settings[k]=v);save();render()};
+  fillSubj();
+}
+function fillSubj(){document.getElementById('subj').innerHTML=`<table>${S.settings.subjects.map((x,i)=>`<tr><td>${esc(x.n)}</td><td style="width:70px"><input type="number" min="1" value="${x.c}" onchange="S.settings.subjects[${i}].c=+this.value||1;save()"></td><td><button class="btn sm red" onclick="S.settings.subjects.splice(${i},1);save();fillSubj()">×</button></td></tr>`).join('')}</table>`}
+function addSubject(){openForm('Nouvelle matière',[{k:'n',l:'Matière',r:1},{k:'c',l:'Coefficient',t:'number',d:1}],{},d=>{S.settings.subjects.push({n:d.n,c:+d.c||1})})}
+function backup(){downloadFile('ecolegest-sauvegarde-'+today()+'.json',JSON.stringify(S),'application/json')}
+function restore(f){if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.settings)throw 0;S=d;S.deposits=S.deposits||[];save();render();alert('Sauvegarde restaurée.')}catch(e){alert('Fichier invalide.')}};r.readAsText(f)}
+function resetAll(){if(confirm(CLOUD?'Effacer TOUTES les données EN LIGNE pour tous les utilisateurs ? Cette action est irréversible.':'Effacer TOUTES les données ? Cette action est irréversible.')&&confirm('Vraiment tout effacer ?')){S=defaults();save();render()}}
+function demo(){
+  if(S.students.length&&!confirm('Ajouter des données de démo aux données existantes ?'))return;
+  const t1={id:uid(),matricule:'',prenom:'Mamadou',nom:'Diallo',sexe:'M',naissance:'1985-04-12',matiere:'Mathématiques',tel:'620000001',email:'m.diallo@exemple.com',adresse:'Kaloum, Conakry',diplome:'Licence en Mathématiques',embauche:'2020-09-01',salaire:1500000},t2={id:uid(),matricule:'',prenom:'Fatoumata',nom:'Camara',sexe:'F',naissance:'1988-11-03',matiere:'Français',tel:'620000002',email:'f.camara@exemple.com',adresse:'Ratoma, Conakry',diplome:'Master en Lettres',embauche:'2021-09-01',salaire:1400000};
+  S.teachers.push(t1,t2);
+  const c1={id:uid(),name:'6ème A',level:'Collège',fee:2500000,teacherId:t1.id},c2={id:uid(),name:'CM2',level:'Primaire',fee:1800000,teacherId:t2.id};
+  S.classes.push(c1,c2);
+  const noms=[['Aïssatou','Barry'],['Ibrahima','Sow'],['Mariama','Bah'],['Sékou','Touré'],['Kadiatou','Keita'],['Alpha','Condé'],['Hawa','Sylla'],['Moussa','Soumah']];
+  noms.forEach((n,i)=>{S.mat++;const s={id:uid(),matricule:'',prenom:n[0],nom:n[1],sexe:i%2?'M':'F',naissance:'2013-0'+(1+i%9)+'-15',classId:i<4?c1.id:c2.id,parent:'Parent '+n[1],tel:'6211000'+i,remise:0,status:'Inscrit'};S.students.push(s);
+    const amt=[1000000,2500000,500000,1800000][i%4];S.counter++;S.payments.push({id:uid(),ref:'R-2026-'+String(S.counter).padStart(4,'0'),studentId:s.id,type:'Scolarité',amount:Math.min(amt,cls(s.classId).fee),mode:MODES[i%3],date:'2026-'+(i%2?'10':'09')+'-'+String(5+i).padStart(2,'0')});
+    S.settings.subjects.forEach(sj=>S.grades[s.id+'|Trimestre 1|'+sj.n]=Math.round((8+Math.random()*11)*4)/4)});
+  S.expenses.push({id:uid(),date:'2026-09-30',category:'Salaire',label:'Salaire Mamadou Diallo – septembre 2026',amount:1500000,teacherId:t1.id},{id:uid(),date:'2026-09-10',category:'Fournitures',label:'Craies, cahiers, registres',amount:350000});
+  save();render();
+}
+
+/* ============ CLOUD (FIREBASE) : connexion, rôles, synchronisation ============ */
+let ME=null,db=null,auth=null,READY=false,BUSY=false,UNSUBS=[],LAST={},PENDING=new Set(),RT=null;
+const ROLE_LABEL={direction:'Direction',comptable:'Comptable',caissier:'Caissier',professeur:'Professeur'};
+const ROLE_PAGES={comptable:['dashboard','eleves','profs','paiements','compta','banque','bulletins'],caissier:['dashboard','eleves','profs','paiements','compta','banque'],professeur:['eleves','notes','bulletins','presences']};
+const ROLE_READ={direction:['classes','students','teachers','payments','expenses','deposits','grades','att'],comptable:['classes','students','teachers','payments','expenses','deposits','grades','att'],caissier:['classes','students','teachers','payments','expenses','deposits'],professeur:['classes','students','grades','att']};
+const ROLE_WRITE={comptable:['students','payments','expenses','meta/counters'],caissier:['payments','expenses','deposits','meta/counters'],professeur:['grades','att']};
+const DENY={professeur:['formStudent','delStudent','viewStudent','exportStudents'],comptable:['formClass','delClass','formTeacher','delTeacher','formDeposit','delDeposit'],caissier:['formStudent','delStudent','formClass','delClass','formTeacher','delTeacher']};
+const role=()=>ME?ME.role:'direction';
+function pageOK(p){if(p==='users')return CLOUD&&role()==='direction';const l=ROLE_PAGES[role()];return !l||l.includes(p)}
+const visiblePages=()=>PAGES.filter(p=>pageOK(p[0]));
+const defaultPage=()=>role()==='professeur'?'notes':'dashboard';
+const stable=o=>JSON.stringify(o,(k,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.keys(v).sort().reduce((a,x)=>(a[x]=v[x],a),{}):v);
+function applyRole(){
+  const r=role();
+  (DENY[r]||[]).forEach(fn=>document.querySelectorAll('#view [onclick^="'+fn+'("],#topact [onclick^="'+fn+'("]').forEach(b=>b.remove()));
+  if(r==='professeur'){document.querySelectorAll('#tbl table tr').forEach(tr=>{const c=tr.children;if(c.length>=7){c[5].remove();c[4].remove()}})}
+}
+function toast(m){let t=document.getElementById('toast');if(!t){t=document.createElement('div');t.id='toast';t.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#14203f;color:#fff;padding:11px 18px;border-radius:10px;z-index:99;font-size:13px;max-width:90vw;box-shadow:0 6px 20px rgba(0,0,0,.25)';document.body.appendChild(t)}t.textContent=m;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(()=>t.style.display='none',4500)}
+function friendly(e){const c=(e&&e.code)||'';
+  if(/invalid-credential|wrong-password|user-not-found|invalid-login/.test(c))return 'E-mail ou mot de passe incorrect.';
+  if(c==='auth/too-many-requests')return 'Trop de tentatives. Patientez quelques minutes puis réessayez.';
+  if(c==='auth/network-request-failed')return 'Pas de connexion Internet.';
+  if(c==='auth/invalid-email')return "Adresse e-mail invalide.";
+  if(c==='auth/email-already-in-use')return 'Cette adresse e-mail est déjà utilisée.';
+  if(c==='auth/weak-password')return 'Mot de passe trop court (6 caractères minimum).';
+  if(c==='auth/operation-not-allowed')return "La connexion par e-mail n'est pas activée dans Firebase (Authentication > Sign-in method).";
+  if(c==='permission-denied')return "Accès refusé. Vérifiez que les règles de sécurité Firestore ont été publiées.";
+  return (e&&e.message)||'Erreur inconnue.';}
+
+/* --- écran de connexion --- */
+function authBox(inner,msg){const a=document.getElementById('auth');a.style.display='flex';a.innerHTML=`<div class="box" style="max-width:400px"><div style="text-align:center;margin-bottom:12px">${logoImg(76)}<h3 style="margin:8px 0 0">${esc(S.settings.name)}</h3><small style="color:var(--muted)">Gestion d'école privée</small></div>${msg?`<div style="background:#fde8e6;color:var(--bad);padding:9px 12px;border-radius:8px;margin-bottom:10px;font-size:13px">${esc(msg)}</div>`:''}${inner}</div>`}
+function showAuth(msg,email){
+  authBox(`<form onsubmit="doLogin(event)"><label>Adresse e-mail<input name="email" type="email" required autocomplete="username" value="${esc(email||'')}"></label><label>Mot de passe<input name="password" type="password" required autocomplete="current-password"></label><div class="row" style="justify-content:stretch"><button class="btn" style="width:100%">Se connecter</button></div></form>
+  <p style="text-align:center;margin:12px 0 0;font-size:13px"><a href="#" onclick="doReset();return false">Mot de passe oublié ?</a> · <a href="#" onclick="showSetup();return false">Première configuration</a></p>`,msg);
+}
+function showSetup(msg){
+  authBox(`<p style="color:var(--muted);font-size:13px;margin-top:0">À faire <b>une seule fois</b> : création du compte <b>Direction</b>, qui pourra ensuite ajouter les comptables et les professeurs.</p><form onsubmit="doSetup(event)"><label>Votre nom<input name="name" required></label><label>Adresse e-mail<input name="email" type="email" required></label><label>Mot de passe (6 caractères minimum)<input name="password" type="password" minlength="6" required></label><label>Confirmer le mot de passe<input name="p2" type="password" minlength="6" required></label><div class="row"><button type="button" class="btn ghost" onclick="showAuth()">Retour</button><button class="btn">Créer le compte Direction</button></div></form>`,msg);
+}
+function hideAuth(){const a=document.getElementById('auth');a.style.display='none';a.innerHTML=''}
+async function doLogin(e){e.preventDefault();const f=new FormData(e.target),em=f.get('email').trim();try{await auth.signInWithEmailAndPassword(em,f.get('password'))}catch(x){showAuth(friendly(x),em)}}
+async function doReset(){const em=prompt('Entrez votre adresse e-mail pour recevoir le lien de réinitialisation :');if(!em)return;try{await auth.sendPasswordResetEmail(em.trim());alert('E-mail envoyé. Vérifiez votre boîte de réception (et les courriers indésirables).')}catch(x){alert(friendly(x))}}
+async function doSetup(e){
+  e.preventDefault();const f=new FormData(e.target);
+  if(f.get('password')!==f.get('p2')){showSetup('Les deux mots de passe sont différents.');return}
+  BUSY=true;let cred=null;
+  try{
+    cred=await auth.createUserWithEmailAndPassword(f.get('email').trim(),f.get('password'));
+    const b=db.batch();
+    b.set(db.doc('users/'+cred.user.uid),{name:f.get('name').trim(),email:f.get('email').trim(),role:'direction'});
+    b.set(db.doc('meta/bootstrap'),{by:cred.user.uid,at:Date.now()});
+    await b.commit();
+    BUSY=false;onUser(auth.currentUser);
+  }catch(x){
+    BUSY=false;
+    if(cred){try{await cred.user.delete()}catch(_){try{await auth.signOut()}catch(__){}}}
+    showSetup(x.code==='permission-denied'?"La première configuration a déjà été faite. Retournez à l'écran de connexion.":friendly(x));
+  }
+}
+
+/* --- démarrage et suivi de la connexion --- */
+function initCloud(){
+  if(!window.firebase){showAuth("Impossible de charger le service en ligne (Internet ?). Rechargez la page.");return}
+  firebase.initializeApp(CFG);auth=firebase.auth();db=firebase.firestore();
+  try{db.enablePersistence({synchronizeTabs:true}).catch(()=>{})}catch(e){}
+  auth.onAuthStateChanged(onUser);
+  addEventListener('online',()=>{if(ME)render()});addEventListener('offline',()=>{if(ME)render()});
+}
+function stopListeners(){UNSUBS.forEach(u=>{try{u()}catch(e){}});UNSUBS=[]}
+async function onUser(u){
+  if(BUSY)return;
+  stopListeners();ME=null;READY=false;LAST={};S=defaults();
+  if(!u){page='dashboard';showAuth();return}
+  try{
+    const d=await db.doc('users/'+u.uid).get();
+    if(!d.exists){await auth.signOut();showAuth("Ce compte n'a pas encore de rôle. Demandez à la direction de l'ajouter.");return}
+    ME=Object.assign({uid:u.uid,email:u.email},d.data());
+  }catch(e){await auth.signOut().catch(()=>{});showAuth(friendly(e));return}
+  hideAuth();page=defaultPage();startListeners();render();
+}
+function startListeners(){
+  const cols=ROLE_READ[ME.role]||[],docs=['meta/settings'].concat(ME.role==='professeur'?[]:['meta/counters']);
+  PENDING=new Set(cols.concat(docs));
+  const isP=ME.role==='professeur',ids=(ME.classIds||[]).slice(0,30);
+  cols.forEach(c=>{
+    let ref=db.collection(c);
+    if(isP&&c!=='classes'){
+      if(!ids.length){onCol(c,{forEach:()=>{}});return}
+      ref=ref.where(c==='students'?'classId':'c','in',ids);
+    }
+    UNSUBS.push(ref.onSnapshot(s=>onCol(c,s),e=>onErr(c,e)));
+  });
+  docs.forEach(p=>UNSUBS.push(db.doc(p).onSnapshot(s=>onDoc(p,s),e=>onErr(p,e))));
+}
+function onErr(p,e){console.error(p,e);toast('Lecture impossible ('+p+') : '+friendly(e))}
+function mergeArr(arr,items){
+  const byId=new Map(arr.map(o=>[o.id,o])),ids=new Set(items.map(o=>o.id));
+  for(let i=arr.length-1;i>=0;i--)if(!ids.has(arr[i].id))arr.splice(i,1);
+  items.forEach(n=>{const o=byId.get(n.id);if(o){Object.keys(o).forEach(k=>{if(!(k in n))delete o[k]});Object.assign(o,n)}else arr.push(n)});
+}
+const SORTS={students:(a,b)=>String(a.matricule||'').localeCompare(String(b.matricule||'')),teachers:(a,b)=>String(a.matricule||a.nom||'').localeCompare(String(b.matricule||b.nom||'')),classes:(a,b)=>String(a.name||'').localeCompare(String(b.name||''),'fr',{numeric:true}),payments:(a,b)=>String(a.ref||'').localeCompare(String(b.ref||'')),expenses:(a,b)=>String(a.date||'').localeCompare(String(b.date||''))};
+function onCol(c,snap){
+  const docs=[];snap.forEach(d=>docs.push({id:d.id,data:d.data()}));
+  Object.keys(LAST).forEach(k=>{if(k.startsWith(c+'/'))delete LAST[k]});
+  docs.forEach(d=>LAST[c+'/'+d.id]=stable(d.data));
+  if(c==='grades'){const g={};docs.forEach(d=>{const m=d.data.g||{};Object.keys(m).forEach(k=>g[d.id+'|'+k]=m[k])});S.grades=g}
+  else if(c==='att'){const a={};docs.forEach(d=>{const x=d.data;a[x.d+'|'+x.c]=x.r});S.att=a}
+  else{mergeArr(S[c],docs.map(d=>d.data));if(SORTS[c])S[c].sort(SORTS[c])}
+  synced(c);
+}
+function onDoc(p,snap){
+  if(snap.exists){const d=snap.data();LAST[p]=stable(d);
+    if(p==='meta/settings'&&d.settings){Object.keys(S.settings).forEach(k=>{if(!(k in d.settings))delete S.settings[k]});Object.assign(S.settings,d.settings)}
+    if(p==='meta/counters'){['counter','mat','tmat'].forEach(k=>S[k]=Math.max(S[k]||0,d[k]||0))}
+  }else delete LAST[p];
+  synced(p);
+}
+function synced(k){
+  if(!READY){PENDING.delete(k);if(PENDING.size)return;READY=true;afterReady()}
+  scheduleRender();
+}
+function scheduleRender(){clearTimeout(RT);RT=setTimeout(()=>{const a=document.activeElement;if(a&&a.closest&&a.closest('#view')&&/INPUT|SELECT/.test(a.tagName)&&!document.getElementById('modal').classList.contains('on')){scheduleRender();return}render()},250)}
+function afterReady(){
+  const empty=!S.classes.length&&!S.students.length&&!S.teachers.length&&!LAST['meta/settings'];
+  const has=LEGACY.students.length||LEGACY.classes.length||LEGACY.teachers.length;
+  let done=false;try{done=localStorage.getItem('ecolegest_imported')}catch(e){}
+  if(role()==='direction'&&!empty)cloudPush();
+  if(role()==='direction'&&empty&&has&&!done&&confirm("Des données existent déjà sur cet appareil ("+LEGACY.students.length+" élèves, "+LEGACY.teachers.length+" professeurs).\n\nVoulez-vous les envoyer en ligne pour les partager avec les autres appareils ?"))importLegacy(true);
+}
+function importLegacy(skipConfirm){
+  if(!skipConfirm&&!confirm("Remplacer les données en ligne par celles de cet appareil ? Les données en ligne actuelles seront effacées."))return;
+  ['classes','students','teachers','payments','expenses','deposits'].forEach(c=>{S[c].length=0;(LEGACY[c]||[]).forEach(o=>S[c].push(o))});
+  S.grades=Object.assign({},LEGACY.grades);S.att=Object.assign({},LEGACY.att);
+  Object.assign(S.settings,LEGACY.settings);if(S.settings.name==='Mon École Privée')S.settings.name='BILL-ÉCOLE';
+  ['counter','mat','tmat'].forEach(k=>S[k]=LEGACY[k]||0);
+  try{localStorage.setItem('ecolegest_imported','1')}catch(e){}
+  cloudPush();render();toast('Données envoyées en ligne.');
+}
+
+/* --- envoi des modifications (seulement ce qui a changé) --- */
+function cloudItems(){
+  const m={};
+  ['classes','students','teachers','payments','expenses','deposits'].forEach(c=>(S[c]||[]).forEach(o=>m[c+'/'+o.id]=o));
+  const g={};Object.keys(S.grades).forEach(k=>{const i=k.indexOf('|');(g[k.slice(0,i)]=g[k.slice(0,i)]||{})[k.slice(i+1)]=S.grades[k]});
+  Object.keys(g).forEach(sid=>m['grades/'+sid]={g:g[sid],c:(stu(sid)||{}).classId||''});
+  Object.keys(S.att).forEach(k=>{const [d,c]=k.split('|');m['att/'+d+'_'+c]={d:d,c:c,r:S.att[k]}});
+  m['meta/settings']={settings:S.settings};
+  m['meta/counters']={counter:S.counter||0,mat:S.mat||0,tmat:S.tmat||0};
+  return m;
+}
+function allowedWrite(p){const w=ROLE_WRITE[role()];return !w||w.some(x=>p===x||p.startsWith(x+'/'))}
+function cloudPush(){
+  if(!ME||!READY)return;
+  const m=cloudItems(),ops=[];
+  Object.keys(m).forEach(p=>{if(!allowedWrite(p))return;const js=stable(m[p]);if(LAST[p]!==js){ops.push(['s',p,JSON.parse(js)]);LAST[p]=js}});
+  Object.keys(LAST).forEach(p=>{if(!(p in m)&&allowedWrite(p)){ops.push(['d',p]);delete LAST[p]}});
+  for(let i=0;i<ops.length;i+=400){
+    const b=db.batch();ops.slice(i,i+400).forEach(o=>o[0]==='s'?b.set(db.doc(o[1]),o[2]):b.delete(db.doc(o[1])));
+    b.commit().catch(e=>{console.error(e);toast(e.code==='permission-denied'?"Action non autorisée pour votre rôle : la modification a été annulée.":'Enregistrement impossible : '+friendly(e))});
+  }
+}
+
+/* --- gestion des utilisateurs (Direction) --- */
+async function vUsers(){
+  document.getElementById('topact').innerHTML='<button class="btn" onclick="formUser()">+ Nouvel utilisateur</button>';
+  const v=document.getElementById('view');v.innerHTML='<div class="card empty">Chargement…</div>';
+  try{
+    const snap=await db.collection('users').get(),rows=[];snap.forEach(d=>rows.push(Object.assign({id:d.id},d.data())));
+    if(page!=='users')return;
+    v.innerHTML=`<div class="card tw"><table><tr><th>Nom</th><th>E-mail</th><th>Rôle</th><th>Classes attribuées</th><th></th></tr>${rows.map(u=>`<tr><td><b>${esc(u.name||'')}</b></td><td>${esc(u.email||'')}</td><td><span class="tag ${u.role==='direction'?'ok':'warn'}">${esc(ROLE_LABEL[u.role]||u.role)}</span></td><td>${u.role==='professeur'?((u.classIds||[]).map(i=>esc(cls(i)?.name||'?')).join(', ')||'<span style="color:var(--bad)">Aucune</span>')+` <button class="btn sm ghost" onclick="editClasses('${u.id}')">Classes</button>`:'—'}</td><td>${u.id===ME.uid?'<small style="color:var(--muted)">(vous)</small>':`<div class="act"><button class="btn sm ghost" onclick="chgRole('${u.id}','${esc(u.role)}')">Changer le rôle</button><button class="btn sm red" onclick="rmUser('${u.id}')">Retirer l'accès</button></div>`}</td></tr>`).join('')}</table></div>
+    <div class="card" style="margin-top:14px;font-size:13px;color:var(--muted)"><b style="color:var(--ink)">Rôles</b><br><b>Direction</b> : tout.<br><b>Comptable</b> : élèves, paiements, comptabilité, banque (lecture), salaires, bulletins (lecture).<br><b>Caissier</b> : comptabilité, encaissements, paiements (dépenses et salaires) et dépôts en banque. Il ne modifie pas les élèves.<br><b>Professeur</b> : élèves (sans les montants), notes, présences, bulletins.</div>`;
+  }catch(e){v.innerHTML='<div class="card empty">Erreur : '+esc(friendly(e))+'</div>'}
+}
+function formUser(){
+  modal(`<h3>Nouvel utilisateur</h3><form onsubmit="saveUser(event)"><label>Nom complet<input name="name" required></label><label>Adresse e-mail<input name="email" type="email" required></label><label>Mot de passe provisoire (6 caractères min.)<input name="password" type="text" minlength="6" required></label><label>Rôle<select name="role" onchange="document.getElementById('ucl').style.display=this.value==='professeur'?'block':'none'"><option value="professeur">Professeur</option><option value="comptable">Comptable</option><option value="caissier">Caissier</option><option value="direction">Direction</option></select></label><div id="ucl"><b style="font-size:12px;color:var(--muted)">Classes attribuées au professeur</b>${classChecks([])}</div><div class="row"><button type="button" class="btn ghost" onclick="closeM()">Annuler</button><button class="btn">Créer le compte</button></div></form>`);
+}
+async function saveUser(e){
+  e.preventDefault();const f=new FormData(e.target),d={name:f.get('name').trim(),email:f.get('email').trim(),password:f.get('password'),role:f.get('role'),classIds:f.get('role')==='professeur'?f.getAll('classIds'):[]};
+  const btn=e.target.querySelector('.btn:not(.ghost)');btn.disabled=true;btn.textContent='Création…';
+  const app2=firebase.initializeApp(CFG,'sec'+Date.now());
+  try{
+    const cred=await app2.auth().createUserWithEmailAndPassword(d.email,d.password);
+    await db.doc('users/'+cred.user.uid).set({name:d.name,email:d.email,role:d.role,classIds:d.classIds});
+    await app2.auth().signOut();closeM();toast('Compte créé. Transmettez-lui son e-mail et son mot de passe provisoire.');vUsers();
+  }catch(x){btn.disabled=false;btn.textContent='Créer le compte';alert(friendly(x))}
+  finally{try{await app2.delete()}catch(_){}}
+}
+function classChecks(sel){
+  if(!S.classes.length)return '<p style="color:var(--muted);font-size:13px">Créez d\'abord des classes.</p>';
+  return LEVELS.concat(['Autres']).map(l=>{const cs=S.classes.filter(c=>levelOf(c)===l).sort(byName);return cs.length?`<div style="margin:6px 0 2px;font-size:12px;color:var(--pri)"><b>${LEVEL_ICON[l]} ${l}</b></div>`+cs.map(c=>`<label style="display:flex;gap:8px;align-items:center;font-weight:400;color:var(--ink);margin:2px 0"><input type="checkbox" name="classIds" value="${c.id}" ${sel.includes(c.id)?'checked':''} style="width:auto;margin:0">${esc(c.name)}</label>`).join(''):''}).join('');
+}
+async function editClasses(id){
+  let u;try{u=(await db.doc('users/'+id).get()).data()}catch(x){alert(friendly(x));return}
+  modal(`<h3>Classes de ${esc(u.name||'')}</h3><p style="color:var(--muted);margin-top:-6px;font-size:13px">Le professeur ne verra et ne modifiera que ces classes.</p><form id="fcl">${classChecks(u.classIds||[])}<div class="row"><button type="button" class="btn ghost" onclick="closeM()">Annuler</button><button class="btn">Enregistrer</button></div></form>`);
+  document.getElementById('fcl').onsubmit=async e=>{e.preventDefault();try{await db.doc('users/'+id).update({classIds:new FormData(e.target).getAll('classIds')});closeM();toast('Classes enregistrées. Le professeur doit se reconnecter.');vUsers()}catch(x){alert(friendly(x))}};
+}
+async function chgRole(id,cur){const r=prompt('Nouveau rôle (direction, comptable, caissier ou professeur) :',cur);if(!r||!ROLE_LABEL[r.trim()])return;try{await db.doc('users/'+id).update({role:r.trim()});vUsers()}catch(x){alert(friendly(x))}}
+async function rmUser(id){if(!confirm("Retirer l'accès de cet utilisateur ? Il ne pourra plus ouvrir les données."))return;try{await db.doc('users/'+id).delete();vUsers()}catch(x){alert(friendly(x))}}
+
+/* ============ INSTALLATION (PWA) ============ */
+let _dip=null;
+const isStandalone=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone;
+const isIOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+function showInst(){const b=document.getElementById('inst');if(b)b.style.display=(isStandalone()?'none':'inline-block')}
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();_dip=e;showInst()});
+window.addEventListener('appinstalled',()=>{_dip=null;showInst()});
+async function installApp(){
+  if(_dip){_dip.prompt();await _dip.userChoice;_dip=null;showInst();return}
+  const ua=navigator.userAgent,rows=[];
+  const ok=(b,t)=>rows.push((b?'✅ ':'❌ ')+t);
+  ok(location.protocol==='https:'||location.hostname==='localhost','Adresse sécurisée (https)');
+  let sw=false;try{sw=!!(await navigator.serviceWorker.getRegistration())}catch(e){}
+  ok(sw,'Service worker actif (mode hors-ligne)');
+  let mf=false;try{mf=(await fetch('manifest.json',{cache:'no-store'})).ok}catch(e){}
+  ok(mf,'Fichier manifest.json trouvé');
+  let ic=false;try{ic=(await fetch('icon-512.png',{cache:'no-store'})).ok}catch(e){}
+  ok(ic,'Icônes trouvées');
+  const inApp=/FBAN|FBAV|Instagram|WhatsApp|Line\/|MicroMessenger|; wv\)|GSA\//i.test(ua);
+  const ff=/Firefox/i.test(ua)&&!/Android/i.test(ua)&&!isIOS();
+  const iosNotSafari=isIOS()&&/CriOS|FxiOS|EdgiOS|OPiOS/i.test(ua);
+  let tip='Votre navigateur n\'a pas proposé l\'installation automatique. Utilisez le menu du navigateur :';
+  let how='<b>Ordinateur (Chrome / Edge) :</b> icône d\'installation à droite de la barre d\'adresse, ou menu ⋮ → « Installer BILL-ÉCOLE » / « Applications → Installer ce site comme application ».<br><b>Android (Chrome) :</b> menu ⋮ → « Installer l\'application » ou « Ajouter à l\'écran d\'accueil ».';
+  if(isStandalone()){tip='L\'application est déjà installée et ouverte en mode application.';how=''}
+  else if(isIOS()){how='<b>iPhone / iPad :</b> ouvrez cette page dans <b>Safari</b>, touchez <b>Partager</b> (carré avec flèche) puis <b>« Sur l\'écran d\'accueil »</b>.'+(iosNotSafari?'<br><b>Vous n\'êtes pas dans Safari : copiez l\'adresse et ouvrez-la dans Safari.</b>':'')}
+  else if(inApp){tip='⚠️ Vous êtes dans un navigateur intégré (WhatsApp, Facebook…). L\'installation y est impossible.';how='Copiez l\'adresse du site et ouvrez-la dans <b>Chrome</b> (Android / ordinateur) ou <b>Edge</b>.'}
+  else if(ff){tip='⚠️ Firefox sur ordinateur ne permet pas d\'installer les applications web.';how='Ouvrez le site dans <b>Chrome</b> ou <b>Edge</b>.'}
+  modal(`<h3>Installer l'application</h3><p style="margin-top:0">${tip}</p><p>${how}</p><p style="font-size:13px;color:var(--muted);line-height:1.7"><b>Vérifications :</b><br>${rows.join('<br>')}</p><p style="font-size:12px;color:var(--muted)">Si déjà installée : cherchez « BILL-ÉCOLE » dans vos applications, ou désinstallez-la puis réessayez. Si vous avez refusé l\'installation plusieurs fois, Chrome peut attendre quelques jours : utilisez alors le menu ⋮.</p><div class="row"><button class="btn" onclick="closeM()">OK</button></div>`);
+}
+if('serviceWorker' in navigator&&location.protocol.startsWith('http')){
+  const had=!!navigator.serviceWorker.controller;let rl=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(had&&!rl){rl=true;location.reload()}});
+  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));
+}
+showInst();
+if(CLOUD)initCloud();else render();
+</script>
+</body>
+</html>
