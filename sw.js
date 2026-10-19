@@ -1,5 +1,5 @@
 // Incrémenter CACHE_VERSION à chaque modification de index.html
-const CACHE_VERSION = 'bill-ecole-v11';
+const CACHE_VERSION = 'bill-ecole-v12';
 const FILES = ['./', './index.html', './manifest.json', './firebase-config.js', './icon-192.png', './icon-512.png', './icon-maskable-192.png', './icon-maskable-512.png'];
 
 self.addEventListener('install', e => {
